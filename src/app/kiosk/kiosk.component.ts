@@ -145,16 +145,6 @@ type KioskView = 'idle' | 'menu' | 'qr' | 'manual' | 'walkin' | 'confirm';
                       (click)="selectedWalkinService.set(svc.id)">
                 <span class="material-symbols-rounded walkin-icon">{{ svc.icon }}</span>
                 <h3>{{ svc.name }}</h3>
-                <div class="svc-meta">
-                  <span class="svc-duration">
-                    <span class="material-symbols-rounded" style="font-size: 13px;">timer</span>
-                    ~{{ svc.avgDuration }}m service
-                  </span>
-                  <span class="svc-wait" [class.short]="getServiceWait(svc.id) < 10" [class.long]="getServiceWait(svc.id) >= 20">
-                    <span class="material-symbols-rounded" style="font-size: 13px;">schedule</span>
-                    ~{{ getServiceWait(svc.id) }}m wait
-                  </span>
-                </div>
               </button>
             }
           }
