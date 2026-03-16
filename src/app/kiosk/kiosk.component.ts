@@ -1,5 +1,6 @@
 import { Component, inject, signal } from '@angular/core';
 import { QueueService } from '../services/queue.service';
+import { CvService } from '../services/cv.service';
 
 type KioskView = 'idle' | 'menu' | 'qr' | 'manual' | 'walkin' | 'confirm';
 
@@ -130,7 +131,16 @@ type KioskView = 'idle' | 'menu' | 'qr' | 'manual' | 'walkin' | 'confirm';
                       (click)="selectedWalkinService.set(svc.id)">
                 <span class="material-symbols-rounded walkin-icon">{{ svc.icon }}</span>
                 <h3>{{ svc.name }}</h3>
-                <p>~{{ svc.avgDuration }} min</p>
+                <div class="svc-meta">
+                  <span class="svc-duration">
+                    <span class="material-symbols-rounded" style="font-size: 13px;">timer</span>
+                    ~{{ svc.avgDuration }}m service
+                  </span>
+                  <span class="svc-wait" [class.short]="getServiceWait(svc.id) < 10" [class.long]="getServiceWait(svc.id) >= 20">
+                    <span class="material-symbols-rounded" style="font-size: 13px;">schedule</span>
+                    ~{{ getServiceWait(svc.id) }}m wait
+                  </span>
+                </div>
               </button>
             }
           }
@@ -343,8 +353,24 @@ type KioskView = 'idle' | 'menu' | 'qr' | 'manual' | 'walkin' | 'confirm';
     .walkin-card:hover { border-color: var(--accent); }
     .walkin-card.selected { border-color: var(--accent); background: hsla(156, 57%, 48%, 0.15); }
     .walkin-icon { font-size: 36px; display: block; margin-bottom: 10px; }
-    .walkin-card h3 { font-size: 15px; font-weight: 600; margin-bottom: 4px; }
+    .walkin-card h3 { font-size: 15px; font-weight: 600; margin-bottom: 6px; }
     .walkin-card p { font-size: 12px; opacity: 0.5; }
+    .svc-meta {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+      margin-top: 6px;
+      font-size: 11px;
+      opacity: 0.55;
+    }
+    .svc-duration, .svc-wait {
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+      justify-content: center;
+    }
+    .svc-wait.short { color: var(--accent); opacity: 1; }
+    .svc-wait.long { color: hsl(0, 70%, 65%); opacity: 1; }
 
     .confirm-screen { justify-content: center; }
     .confirm-glow {
@@ -388,6 +414,7 @@ type KioskView = 'idle' | 'menu' | 'qr' | 'manual' | 'walkin' | 'confirm';
 })
 export class KioskComponent {
   readonly queueService = inject(QueueService);
+  private readonly _cvService = inject(CvService);
 
   readonly view = signal<KioskView>('idle');
   readonly refInput = signal('AQS-2026-');
@@ -429,14 +456,20 @@ export class KioskComponent {
     this.showConfirmation(svc?.name ?? 'General', svcId);
   }
 
+  getServiceWait(serviceId: string): number {
+    const waitingForService = this.queueService.queue()
+      .filter(q => q.status === 'waiting' && q.service === this.queueService.services().find(s => s.id === serviceId)?.name);
+    const position = waitingForService.length + 1;
+    return this._cvService.getEstimatedWaitForQueue(position, serviceId, 'norwalk');
+  }
+
   private showConfirmation(serviceName: string, serviceId: string): void {
     const item = this.queueService.addToQueue('Walk-In Customer', serviceId, '', '');
     this.confirmedTicket.set(item.ticket);
     this.confirmedService.set(serviceName);
     const waiting = this.queueService.queue().filter(q => q.status === 'waiting');
     this.queuePosition.set(waiting.length);
-    const svc = this.queueService.services().find(s => s.id === serviceId);
-    this.estimatedWait.set(waiting.length * (svc?.avgDuration ?? 15));
+    this.estimatedWait.set(this.getServiceWait(serviceId));
     this.view.set('confirm');
   }
 }
