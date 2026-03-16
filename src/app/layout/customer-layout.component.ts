@@ -7,31 +7,46 @@ import { Router, RouterOutlet, RouterLink, RouterLinkActive } from '@angular/rou
   imports: [RouterOutlet, RouterLink, RouterLinkActive],
   template: `
     <div class="customer-layout">
-      <header class="customer-header">
-        <a routerLink="/booking" class="header-brand">
-          <span class="brand-mark">AQS</span>
-          <div class="brand-text">
-            <span class="brand-title">LA County Registrar-Recorder/County Clerk</span>
-            <span class="brand-sub">Appointment & Queuing System</span>
-          </div>
-        </a>
-        <nav class="header-nav">
-          @for (item of navItems; track item.path) {
-            <a [routerLink]="item.path"
-               routerLinkActive="active"
-               class="nav-link"
-               [attr.aria-label]="item.label">
-              <span class="material-symbols-rounded nav-icon">{{ item.icon }}</span>
-              {{ item.label }}
+      <header class="header">
+        <div class="header-inner">
+          <!-- Brand -->
+          <a routerLink="/booking" class="brand">
+            <span class="brand-icon">
+              <span class="material-symbols-rounded" style="font-size: 22px;">assured_workload</span>
+            </span>
+            <div class="brand-text">
+              <span class="brand-name">LA County RR/CC</span>
+              <span class="brand-sub">Appointment & Queuing</span>
+            </div>
+          </a>
+
+          <!-- Nav -->
+          <nav class="nav">
+            @for (item of navItems; track item.path) {
+              <a [routerLink]="item.path"
+                 routerLinkActive="active"
+                 class="nav-link"
+                 [attr.aria-label]="item.label">
+                <span class="material-symbols-rounded nav-icon">{{ item.icon }}</span>
+                <span class="nav-text">{{ item.label }}</span>
+              </a>
+            }
+          </nav>
+
+          <!-- Right -->
+          <div class="header-right">
+            <div class="status-pill">
+              <span class="status-dot"></span>
+              <span class="status-text">Online</span>
+            </div>
+            <a routerLink="/admin" class="staff-btn" aria-label="Staff Login">
+              <span class="material-symbols-rounded" style="font-size: 18px;">shield_person</span>
+              <span class="staff-text">Staff Portal</span>
             </a>
-          }
-        </nav>
-        <a routerLink="/admin" class="staff-login">
-          <span class="material-symbols-rounded" style="font-size: 18px;">lock</span>
-          Staff Login
-        </a>
+          </div>
+        </div>
       </header>
-      <main class="customer-content" [class.fullscreen]="isFullscreen()">
+      <main class="main" [class.fullscreen]="isFullscreen()">
         <router-outlet />
       </main>
     </div>
@@ -43,110 +58,154 @@ import { Router, RouterOutlet, RouterLink, RouterLinkActive } from '@angular/rou
       height: 100vh;
       overflow: hidden;
     }
-    .customer-header {
-      height: 64px;
-      background: var(--base-100);
-      border-bottom: 1px solid var(--base-200);
+
+    .header {
+      background: var(--secondary);
+      flex-shrink: 0;
+      z-index: 10;
+    }
+    .header-inner {
+      max-width: 1400px;
+      margin: 0 auto;
+      height: 60px;
       display: flex;
       align-items: center;
       padding: 0 24px;
-      gap: 32px;
-      flex-shrink: 0;
-      box-shadow: var(--shadow);
-      z-index: 10;
+      gap: 8px;
     }
-    .header-brand {
+
+    /* Brand */
+    .brand {
       display: flex;
       align-items: center;
-      gap: 12px;
+      gap: 10px;
       text-decoration: none;
-      color: inherit;
+      color: var(--secondary-content);
+      margin-right: 20px;
       flex-shrink: 0;
     }
-    .brand-mark {
-      width: 38px;
-      height: 38px;
-      border-radius: 10px;
+    .brand-icon {
+      width: 36px;
+      height: 36px;
+      border-radius: 8px;
       background: var(--primary);
       color: var(--primary-content);
       display: flex;
       align-items: center;
       justify-content: center;
-      font-weight: 700;
-      font-size: 13px;
-      letter-spacing: -0.5px;
     }
-    .brand-text { display: flex; flex-direction: column; }
-    .brand-title {
-      font-size: 14px;
+    .brand-text { display: flex; flex-direction: column; line-height: 1.2; }
+    .brand-name {
+      font-size: 13px;
       font-weight: 700;
-      color: var(--base-content);
-      line-height: 1.2;
+      color: var(--secondary-content);
     }
     .brand-sub {
-      font-size: 11px;
-      color: var(--neutral);
+      font-size: 10px;
+      color: rgba(255,255,255,0.45);
     }
-    .header-nav {
+
+    /* Nav */
+    .nav {
       display: flex;
       align-items: center;
-      gap: 4px;
+      gap: 2px;
       flex: 1;
     }
     .nav-link {
       display: flex;
       align-items: center;
-      gap: 6px;
+      gap: 7px;
       padding: 8px 16px;
-      border-radius: 8px;
+      border-radius: 6px;
       font-size: 13px;
-      font-weight: 600;
-      color: var(--neutral);
+      font-weight: 500;
+      color: rgba(255,255,255,0.55);
       text-decoration: none;
       transition: all 0.15s;
+      position: relative;
     }
     .nav-link:hover {
-      background: var(--primary-wash);
-      color: var(--primary);
+      background: rgba(255,255,255,0.08);
+      color: rgba(255,255,255,0.9);
     }
     .nav-link.active {
+      background: rgba(255,255,255,0.1);
+      color: var(--secondary-content);
+    }
+    .nav-link.active::after {
+      content: '';
+      position: absolute;
+      bottom: -9px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 24px;
+      height: 2px;
       background: var(--primary);
-      color: var(--primary-content);
+      border-radius: 1px;
     }
     .nav-icon { font-size: 18px; }
-    .staff-login {
+
+    /* Right */
+    .header-right {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-shrink: 0;
+    }
+    .status-pill {
       display: flex;
       align-items: center;
       gap: 6px;
-      padding: 8px 16px;
-      border-radius: 8px;
+      padding: 5px 12px;
+      border-radius: 100px;
+      background: rgba(255,255,255,0.06);
+      font-size: 11px;
+      color: rgba(255,255,255,0.5);
+    }
+    .status-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--success);
+      animation: pulse 2s infinite;
+    }
+    .staff-btn {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 7px 14px;
+      border-radius: 6px;
       font-size: 12px;
       font-weight: 600;
-      color: var(--neutral);
+      color: rgba(255,255,255,0.6);
       text-decoration: none;
-      border: 1px solid var(--base-200);
+      border: 1px solid rgba(255,255,255,0.12);
       transition: all 0.15s;
-      flex-shrink: 0;
     }
-    .staff-login:hover {
-      border-color: var(--primary);
-      color: var(--primary);
-    }
-    .customer-content {
-      flex: 1;
-      overflow-y: auto;
-      padding: 24px 28px;
-    }
-    .customer-content.fullscreen {
-      padding: 0;
+    .staff-btn:hover {
+      border-color: rgba(255,255,255,0.3);
+      color: var(--secondary-content);
+      background: rgba(255,255,255,0.06);
     }
 
+    /* Main */
+    .main {
+      flex: 1;
+      overflow-y: auto;
+      padding: 28px 32px;
+      background: var(--base-200);
+    }
+    .main.fullscreen { padding: 0; }
+
     @media (max-width: 768px) {
-      .customer-header { padding: 0 12px; gap: 12px; }
+      .header-inner { padding: 0 12px; }
       .brand-text { display: none; }
-      .nav-link span:not(.nav-icon) { display: none; }
-      .nav-link { padding: 8px 12px; }
-      .staff-login span:not(.material-symbols-rounded) { display: none; }
+      .nav-text { display: none; }
+      .nav-link { padding: 8px 10px; }
+      .status-text { display: none; }
+      .staff-text { display: none; }
+      .staff-btn { padding: 7px 10px; }
     }
   `]
 })
@@ -158,6 +217,16 @@ export class CustomerLayoutComponent {
     { path: '/kiosk', label: 'Self Check-In', icon: 'desktop_windows' },
     { path: '/queue', label: 'Queue Status', icon: 'groups' },
   ];
+
+  getPageTitle(): string {
+    const url = this._router.url;
+    const titles: Record<string, string> = {
+      '/booking': 'Book an Appointment',
+      '/kiosk': 'Self-Service Check-In',
+      '/queue': 'Queue Status',
+    };
+    return titles[url] ?? 'AQS';
+  }
 
   isFullscreen(): boolean {
     const url = this._router.url;
