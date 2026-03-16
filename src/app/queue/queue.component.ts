@@ -238,6 +238,7 @@ export class QueueComponent implements OnInit, OnDestroy {
 
   private _clockInterval: ReturnType<typeof setInterval> | null = null;
   private _cycleInterval: ReturnType<typeof setInterval> | null = null;
+  private _keepaliveInterval: ReturnType<typeof setInterval> | null = null;
   private _lastAnnouncedTicket = '';
   private _synth = typeof window !== 'undefined' ? window.speechSynthesis : null;
   private _audioUnlocked = false;
@@ -271,11 +272,21 @@ export class QueueComponent implements OnInit, OnDestroy {
       this.isCycling.set(true);
       setTimeout(() => this.isCycling.set(false), 600);
     }, 8000);
+
+    // Chrome workaround: keep speechSynthesis alive by poking it every 10s
+    // Without this, Chrome suspends the synth after ~15s of inactivity
+    this._keepaliveInterval = setInterval(() => {
+      if (this._synth && this.soundEnabled()) {
+        this._synth.pause();
+        this._synth.resume();
+      }
+    }, 10000);
   }
 
   ngOnDestroy(): void {
     if (this._clockInterval) clearInterval(this._clockInterval);
     if (this._cycleInterval) clearInterval(this._cycleInterval);
+    if (this._keepaliveInterval) clearInterval(this._keepaliveInterval);
   }
 
   private updateClock(): void {
@@ -344,28 +355,35 @@ export class QueueComponent implements OnInit, OnDestroy {
       console.warn('[AQS] SpeechSynthesis not available');
       return;
     }
+
+    // Chrome bug workaround: cancel + pause/resume to unstick the queue
     this._synth.cancel();
+    this._synth.pause();
+    this._synth.resume();
 
     const spellTicket = ticket.split('').join(' ');
     const text = `Now serving, ${spellTicket}, at counter ${counter}.`;
     console.log('[AQS] Speaking:', text);
 
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.lang = 'en-US';
-    utterance.rate = 0.9;
-    utterance.pitch = 1;
-    utterance.volume = 1;
+    // Small delay to let cancel fully clear
+    setTimeout(() => {
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = 'en-US';
+      utterance.rate = 0.9;
+      utterance.pitch = 1;
+      utterance.volume = 1;
 
-    utterance.onerror = (e) => console.error('[AQS] Speech error:', e);
-    utterance.onstart = () => console.log('[AQS] Speech started');
-    utterance.onend = () => console.log('[AQS] Speech ended');
+      utterance.onerror = (e) => console.error('[AQS] Speech error:', e);
+      utterance.onstart = () => console.log('[AQS] Speech started');
+      utterance.onend = () => console.log('[AQS] Speech ended');
 
-    // Prefer a natural voice if available
-    const voices = this._synth.getVoices();
-    const preferredVoice = voices.find(v => v.name.includes('Google') && v.lang.startsWith('en'))
-      || voices.find(v => v.lang.startsWith('en'));
-    if (preferredVoice) utterance.voice = preferredVoice;
+      // Prefer a natural voice if available
+      const voices = this._synth!.getVoices();
+      const preferredVoice = voices.find(v => v.name.includes('Google') && v.lang.startsWith('en'))
+        || voices.find(v => v.lang.startsWith('en'));
+      if (preferredVoice) utterance.voice = preferredVoice;
 
-    this._synth.speak(utterance);
+      this._synth!.speak(utterance);
+    }, 100);
   }
 }
