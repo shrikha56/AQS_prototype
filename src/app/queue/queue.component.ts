@@ -361,15 +361,14 @@ export class QueueComponent implements OnInit, OnDestroy {
     this._synth.pause();
     this._synth.resume();
 
-    const spellTicket = ticket.split('').join(' ');
-    const text = `Now serving, ${spellTicket}, at counter ${counter}.`;
+    const text = `Now serving, ticket ${ticket}, at counter ${counter}.`;
     console.log('[AQS] Speaking:', text);
 
     // Small delay to let cancel fully clear
     setTimeout(() => {
       const utterance = new SpeechSynthesisUtterance(text);
       utterance.lang = 'en-US';
-      utterance.rate = 0.9;
+      utterance.rate = 1;
       utterance.pitch = 1;
       utterance.volume = 1;
 
