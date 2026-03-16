@@ -278,10 +278,12 @@ import { QueueService } from '../services/queue.service';
     .step-label { font-size: 11px; color: var(--neutral); font-weight: 600; }
     .step.active .step-label { color: var(--primary); }
     .step-line {
-      width: 48px; height: 2px;
-      background: var(--base-200);
-      margin: 0 8px;
+      flex: 1;
+      max-width: 64px;
+      height: 2px;
+      background: var(--base-300);
       margin-bottom: 18px;
+      border-radius: 1px;
       transition: background 0.3s;
     }
     .step-line.active { background: var(--success); }
