@@ -1,4 +1,4 @@
-import { Component, inject, signal, computed, OnInit, OnDestroy } from '@angular/core';
+import { Component, inject, signal, computed, effect, OnInit, OnDestroy } from '@angular/core';
 import { QueueService } from '../services/queue.service';
 import { CvService } from '../services/cv.service';
 
@@ -8,7 +8,14 @@ import { CvService } from '../services/cv.service';
   template: `
     <div class="queue-display">
       <div class="display-left">
-        <div class="now-serving-label">NOW SERVING</div>
+        <div class="now-serving-label">
+          NOW SERVING
+          <button class="sound-toggle" (click)="toggleSound()" [title]="soundEnabled() ? 'Mute announcements' : 'Enable announcements'">
+            <span class="material-symbols-rounded" style="font-size: 20px;">
+              {{ soundEnabled() ? 'volume_up' : 'volume_off' }}
+            </span>
+          </button>
+        </div>
         <div class="now-serving-ticket mono" [class.cycling]="isCycling()">
           {{ currentServing() }}
         </div>
@@ -91,6 +98,26 @@ import { CvService } from '../services/cv.service';
       text-transform: uppercase;
       color: var(--accent);
       margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .sound-toggle {
+      background: rgba(255,255,255,0.08);
+      border: 1px solid rgba(255,255,255,0.15);
+      border-radius: 50%;
+      width: 36px;
+      height: 36px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: rgba(255,255,255,0.5);
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .sound-toggle:hover {
+      background: rgba(255,255,255,0.15);
+      color: rgba(255,255,255,0.9);
     }
     .now-serving-ticket {
       font-size: 96px;
@@ -206,12 +233,35 @@ export class QueueComponent implements OnInit, OnDestroy {
 
   readonly currentTime = signal('');
   readonly isCycling = signal(false);
+  readonly soundEnabled = signal(true);
   readonly servedToday = 47;
 
   private _clockInterval: ReturnType<typeof setInterval> | null = null;
   private _cycleInterval: ReturnType<typeof setInterval> | null = null;
+  private _lastAnnouncedTicket = '';
+  private _synth = typeof window !== 'undefined' ? window.speechSynthesis : null;
+
+  constructor() {
+    // Watch for changes in the currently serving ticket and announce
+    effect(() => {
+      const serving = this.queueService.queue().find(q => q.status === 'serving');
+      if (!serving) return;
+      const ticket = serving.ticket;
+      const counter = serving.counter ?? 0;
+      if (ticket && ticket !== this._lastAnnouncedTicket && ticket !== '---') {
+        this._lastAnnouncedTicket = ticket;
+        if (this.soundEnabled()) {
+          this._announce(ticket, counter);
+        }
+      }
+    });
+  }
 
   ngOnInit(): void {
+    // Set initial ticket so we don't announce on page load
+    const serving = this.queueService.queue().find(q => q.status === 'serving');
+    if (serving) this._lastAnnouncedTicket = serving.ticket;
+
     this.updateClock();
     this._clockInterval = setInterval(() => this.updateClock(), 1000);
     this._cycleInterval = setInterval(() => {
@@ -263,4 +313,52 @@ export class QueueComponent implements OnInit, OnDestroy {
     const pred = this.cvService.getPredictionForLocation('norwalk');
     return pred?.predicted_wait_minutes ?? 0;
   });
+
+  toggleSound(): void {
+    this.soundEnabled.update(v => !v);
+  }
+
+  private _announce(ticket: string, counter: number): void {
+    if (!this._synth) return;
+    this._synth.cancel();
+
+    const spellTicket = ticket.split('').join(' ');
+    const text = `Now serving, ${spellTicket}, at counter ${counter}.`;
+
+    // Play a brief chime tone before speaking
+    try {
+      const ctx = new AudioContext();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.frequency.value = 880;
+      osc.type = 'sine';
+      gain.gain.value = 0.15;
+      osc.start();
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4);
+      osc.stop(ctx.currentTime + 0.4);
+
+      setTimeout(() => {
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.lang = 'en-US';
+        utterance.rate = 0.9;
+        utterance.pitch = 1;
+        utterance.volume = 1;
+
+        // Prefer a Google voice if available
+        const voices = this._synth!.getVoices();
+        const googleVoice = voices.find(v => v.name.includes('Google') && v.lang.startsWith('en'));
+        if (googleVoice) utterance.voice = googleVoice;
+
+        this._synth!.speak(utterance);
+        ctx.close();
+      }, 500);
+    } catch {
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = 'en-US';
+      utterance.rate = 0.9;
+      this._synth.speak(utterance);
+    }
+  }
 }
