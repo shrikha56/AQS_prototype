@@ -1,6 +1,7 @@
-import { Component, inject, signal, OnInit, AfterViewInit, ElementRef, viewChild } from '@angular/core';
+import { Component, inject, signal, computed, AfterViewInit, ElementRef, viewChild } from '@angular/core';
 import { TitleCasePipe } from '@angular/common';
 import { QueueService } from '../services/queue.service';
+import { CvService } from '../services/cv.service';
 
 @Component({
   selector: 'app-admin',
@@ -10,7 +11,7 @@ import { QueueService } from '../services/queue.service';
     <div class="admin">
       <!-- Top Stats -->
       <div class="stats-row">
-        @for (stat of topStats; track stat.label) {
+        @for (stat of topStats(); track stat.label) {
           <div class="stat-card card">
             <div class="stat-header">
               <span class="material-symbols-rounded stat-icon">{{ stat.icon }}</span>
@@ -201,17 +202,24 @@ import { QueueService } from '../services/queue.service';
 })
 export class AdminComponent implements AfterViewInit {
   readonly queueService = inject(QueueService);
+  private readonly _cvService = inject(CvService);
 
   readonly peakChartRef = viewChild<ElementRef<HTMLCanvasElement>>('peakChart');
   readonly depthChartRef = viewChild<ElementRef<HTMLCanvasElement>>('depthChart');
 
-  readonly topStats = [
-    { icon: 'schedule', label: 'Waiting', value: '12', change: '+3', changePositive: false },
-    { icon: 'person', label: 'Being Served', value: '4', change: '-1', changePositive: true },
-    { icon: 'check_circle', label: 'Completed', value: '47', change: '+12', changePositive: true },
-    { icon: 'timer', label: 'Avg Wait', value: '14m', change: '-2m', changePositive: true },
-    { icon: 'star', label: 'CSAT Score', value: '4.6', change: '+0.2', changePositive: true },
-  ];
+  readonly topStats = computed(() => {
+    const waiting = this.queueService.waitingCount();
+    const serving = this.queueService.servingCount();
+    const avgWait = this.queueService.avgWaitMinutes();
+    const avgOcc = this._cvService.avg_occupancy();
+    return [
+      { icon: 'schedule', label: 'Waiting', value: String(waiting), change: waiting > 10 ? 'High' : 'Normal', changePositive: waiting <= 10 },
+      { icon: 'person', label: 'Being Served', value: String(serving), change: serving + ' active', changePositive: true },
+      { icon: 'check_circle', label: 'Completed', value: '47', change: '+12', changePositive: true },
+      { icon: 'timer', label: 'Avg Wait', value: avgWait + 'm', change: avgWait < 15 ? 'Good' : 'Elevated', changePositive: avgWait < 15 },
+      { icon: 'monitoring', label: 'Occupancy', value: avgOcc + '%', change: avgOcc > 65 ? 'High' : 'Normal', changePositive: avgOcc <= 65 },
+    ];
+  });
 
   readonly csatData = [
     { service: 'Vital Records', score: 92 },

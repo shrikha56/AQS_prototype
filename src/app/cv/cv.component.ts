@@ -7,293 +7,212 @@ import { CvService, BusynessLevel, CvPrediction } from '../services/cv.service';
   standalone: true,
   imports: [DecimalPipe],
   template: `
-    <div class="analytics">
+    <div class="admin">
 
-      <!-- Page header strip -->
-      <div class="page-header">
-        <div class="ph-left">
-          <span class="ph-badge">
-            <span class="ph-dot"></span>
-            Live
-          </span>
-          <span class="ph-meta">{{ activeCameras() }} sensors across {{ cvService.getLocations().length }} locations</span>
-        </div>
-        <div class="ph-right">
-          <span class="ph-ts">Last updated {{ lastUpdated() }}</span>
-        </div>
-      </div>
-
-      <!-- KPI strip -->
-      <div class="kpi-strip">
-        <div class="kpi">
-          <div class="kpi-val">{{ cvService.total_people() }}</div>
-          <div class="kpi-label">Total Visitors</div>
-          <div class="kpi-sub">Across all locations</div>
-        </div>
-        <div class="kpi-divider"></div>
-        <div class="kpi">
-          <div class="kpi-val">{{ cvService.avg_occupancy() }}<span class="kpi-unit">%</span></div>
-          <div class="kpi-label">Avg Occupancy</div>
-          <div class="kpi-sub" [class.warn]="cvService.avg_occupancy() > 65">
-            {{ cvService.avg_occupancy() > 65 ? 'Above target' : 'Within target' }}
+      <!-- Top Stats (same pattern as dashboard) -->
+      <div class="stats-row">
+        @for (stat of liveStats(); track stat.label) {
+          <div class="stat-card card">
+            <div class="stat-header">
+              <span class="material-symbols-rounded stat-icon">{{ stat.icon }}</span>
+              <span class="stat-change" [class.positive]="stat.positive" [class.negative]="!stat.positive">
+                {{ stat.change }}
+              </span>
+            </div>
+            <div class="stat-value">{{ stat.value }}</div>
+            <div class="stat-label">{{ stat.label }}</div>
           </div>
-        </div>
-        <div class="kpi-divider"></div>
-        <div class="kpi">
-          <div class="kpi-val">{{ avgWait() }}<span class="kpi-unit">min</span></div>
-          <div class="kpi-label">Avg Predicted Wait</div>
-          <div class="kpi-sub">AI-estimated</div>
-        </div>
-        <div class="kpi-divider"></div>
-        <div class="kpi">
-          <div class="kpi-val kpi-loc">{{ cvService.busiest_location() }}</div>
-          <div class="kpi-label">Busiest Location</div>
-          <div class="kpi-sub warn">May need staffing</div>
-        </div>
+        }
       </div>
 
-      <!-- Main grid -->
-      <div class="main-grid">
-
-        <!-- Location cards -->
-        <div class="section locations-section">
-          <div class="section-header">
-            <h3>Location Overview</h3>
-            <div class="sh-controls">
-              <button class="pill-btn" [class.active]="sort_mode() === 'occupancy'" (click)="sort_mode.set('occupancy')">By Occupancy</button>
-              <button class="pill-btn" [class.active]="sort_mode() === 'wait'" (click)="sort_mode.set('wait')">By Wait Time</button>
+      <!-- Charts Row (same 2-col as dashboard) -->
+      <div class="charts-row">
+        <div class="card chart-card">
+          <div class="card-header">
+            <h3>Occupancy Trend</h3>
+            <div class="header-controls">
+              <select class="ctrl-select" (change)="chart_location.set(asSelect($event).value)">
+                <option value="all">All Locations</option>
+                @for (loc of cvService.getLocations(); track loc.id) {
+                  <option [value]="loc.id">{{ loc.name }}</option>
+                }
+              </select>
+              <span class="badge badge-info">
+                <span class="live-dot"></span>
+                Live
+              </span>
             </div>
           </div>
-          <div class="loc-cards">
-            @for (pred of sortedPredictions(); track pred.location_id) {
-              <div class="loc-card" [class.selected]="selected_location() === pred.location_id"
-                   (click)="selected_location.set(pred.location_id)">
-                <div class="lc-top">
-                  <div class="lc-name">{{ pred.location_name }}</div>
-                  <span class="lc-trend" [class]="'trend-' + pred.trend">
-                    <span class="material-symbols-rounded" style="font-size: 16px;">
-                      {{ pred.trend === 'increasing' ? 'north_east' : pred.trend === 'decreasing' ? 'south_east' : 'east' }}
-                    </span>
-                  </span>
-                </div>
-                <div class="lc-occ-row">
-                  <div class="lc-occ-track">
-                    <div class="lc-occ-fill" [class]="'fill-' + pred.busyness"
-                         [style.width.%]="(pred.people_count / pred.capacity) * 100"></div>
-                  </div>
-                  <span class="lc-occ-pct">{{ ((pred.people_count / pred.capacity) * 100) | number:'1.0-0' }}%</span>
-                </div>
-                <div class="lc-bottom">
-                  <div class="lc-stat">
-                    <span class="lc-stat-val">{{ pred.people_count }}</span>
-                    <span class="lc-stat-label">visitors</span>
-                  </div>
-                  <div class="lc-stat">
-                    <span class="lc-stat-val">~{{ pred.predicted_wait_minutes }}m</span>
-                    <span class="lc-stat-label">wait</span>
-                  </div>
-                  <span class="lc-badge" [class]="'b-' + pred.busyness">{{ formatBusyness(pred.busyness) }}</span>
-                </div>
-              </div>
-            }
-          </div>
-        </div>
-
-        <!-- Right column: detail for selected location -->
-        <div class="section detail-section">
-          <div class="section-header">
-            <h3>{{ selectedPrediction()?.location_name ?? 'Select a location' }}</h3>
-            @if (selectedPrediction()) {
-              <span class="lc-badge" [class]="'b-' + selectedPrediction()!.busyness">
-                {{ formatBusyness(selectedPrediction()!.busyness) }}
+          <canvas #occupancyChart width="600" height="220"></canvas>
+          <div class="chart-legend">
+            @for (loc of chartLegend(); track loc.id; let i = $index) {
+              <span class="cl-item">
+                <span class="cl-dot" [style.background]="chartColors[i % chartColors.length]"></span>
+                {{ loc.name }}
               </span>
             }
           </div>
-
-          @if (selectedPrediction(); as pred) {
-            <!-- Zone heatmap -->
-            <div class="detail-block">
-              <div class="db-label">Zone Occupancy</div>
-              <div class="zone-strip">
-                @for (zone of currentHeatmap(); track zone.zone_name) {
-                  <div class="zone-cell">
-                    <div class="zc-bar-wrap">
-                      <div class="zc-bar" [style.height.%]="zone.intensity * 100"
-                           [style.background]="getHeatColor(zone.intensity)"></div>
-                    </div>
-                    <span class="zc-pct">{{ (zone.intensity * 100) | number:'1.0-0' }}%</span>
-                    <span class="zc-name">{{ zone.zone_name }}</span>
-                  </div>
-                }
-              </div>
-            </div>
-
-            <!-- Sensor feeds -->
-            <div class="detail-block">
-              <div class="db-label">
-                Sensors
-                <span class="db-label-sub">({{ locationCameras().length }} active)</span>
-              </div>
-              <div class="sensor-grid">
-                @for (cam of locationCameras(); track cam.id) {
-                  <div class="sensor-card" [class.offline]="cam.status === 'offline'">
-                    <div class="sc-feed">
-                      @if (cam.status === 'offline') {
-                        <span class="material-symbols-rounded sc-icon-off">videocam_off</span>
-                      } @else {
-                        <div class="sc-scanlines"></div>
-                        <span class="material-symbols-rounded sc-icon">person_search</span>
-                        <div class="sc-count-badge">
-                          <span class="sc-count">{{ cam.people_count }}</span>
-                        </div>
-                        <div class="sc-capacity-bar">
-                          <div class="sc-cap-fill" [style.width.%]="(cam.people_count / cam.max_capacity) * 100"></div>
-                        </div>
-                      }
-                    </div>
-                    <div class="sc-meta">
-                      <span class="sc-zone">{{ cam.zone }}</span>
-                      @if (cam.status === 'active') {
-                        <span class="sc-ratio">{{ cam.people_count }}/{{ cam.max_capacity }}</span>
-                      } @else {
-                        <span class="sc-ratio offline-text">Offline</span>
-                      }
-                    </div>
-                  </div>
-                }
-              </div>
-            </div>
-
-            <!-- Prediction confidence -->
-            <div class="detail-block">
-              <div class="db-label">Prediction Model</div>
-              <div class="model-row">
-                <div class="model-stat">
-                  <span class="ms-label">Confidence</span>
-                  <div class="confidence-ring">
-                    <svg viewBox="0 0 40 40" class="conf-svg">
-                      <circle cx="20" cy="20" r="16" fill="none" stroke="var(--base-200)" stroke-width="3"/>
-                      <circle cx="20" cy="20" r="16" fill="none" stroke="var(--primary)" stroke-width="3"
-                              [attr.stroke-dasharray]="pred.confidence * 1.005 + ' 100'"
-                              stroke-linecap="round"
-                              transform="rotate(-90 20 20)"/>
-                    </svg>
-                    <span class="conf-val">{{ pred.confidence }}%</span>
-                  </div>
+        </div>
+        <div class="card chart-card">
+          <div class="card-header">
+            <h3>Zone Breakdown</h3>
+            <select class="ctrl-select" (change)="selected_location.set(asSelect($event).value)">
+              @for (loc of cvService.getLocations(); track loc.id) {
+                <option [value]="loc.id" [selected]="loc.id === selected_location()">{{ loc.name }}</option>
+              }
+            </select>
+          </div>
+          <div class="zone-chart">
+            @for (zone of currentHeatmap(); track zone.zone_name) {
+              <div class="zone-bar-row">
+                <span class="zb-label">{{ zone.zone_name }}</span>
+                <div class="zb-track">
+                  <div class="zb-fill" [style.width.%]="zone.intensity * 100"
+                       [style.background]="getHeatColor(zone.intensity)"></div>
                 </div>
-                <div class="model-stat">
-                  <span class="ms-label">Trend</span>
-                  <div class="trend-display" [class]="'trend-' + pred.trend">
-                    <span class="material-symbols-rounded" style="font-size: 22px;">
-                      {{ pred.trend === 'increasing' ? 'trending_up' : pred.trend === 'decreasing' ? 'trending_down' : 'trending_flat' }}
-                    </span>
-                    <span class="td-text">{{ pred.trend === 'increasing' ? 'Rising' : pred.trend === 'decreasing' ? 'Declining' : 'Stable' }}</span>
-                  </div>
-                </div>
-                <div class="model-stat">
-                  <span class="ms-label">Est. Wait</span>
-                  <div class="wait-display">
-                    <span class="wd-val">{{ pred.predicted_wait_minutes }}</span>
-                    <span class="wd-unit">min</span>
-                  </div>
-                </div>
+                <span class="zb-pct">{{ (zone.intensity * 100) | number:'1.0-0' }}%</span>
               </div>
+            }
+          </div>
+          <div class="sensor-summary">
+            <span class="ss-label">Active Sensors</span>
+            <div class="ss-dots">
+              @for (cam of locationCameras(); track cam.id) {
+                <div class="ss-dot" [class.active]="cam.status === 'active'" [class.offline]="cam.status === 'offline'"
+                     [title]="cam.zone + ': ' + (cam.status === 'active' ? cam.people_count + '/' + cam.max_capacity : 'Offline')">
+                </div>
+              }
             </div>
-          } @else {
-            <div class="empty-detail">
-              <span class="material-symbols-rounded" style="font-size: 40px; color: var(--base-300);">analytics</span>
-              <p>Select a location to view detailed analytics</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Location Status Grid (mirrors counter-grid pattern) -->
+      <div class="card">
+        <div class="card-header">
+          <h3>Location Status</h3>
+          <div class="header-controls">
+            <button class="pill-btn" [class.active]="sort_mode() === 'occupancy'" (click)="sort_mode.set('occupancy')">By Occupancy</button>
+            <button class="pill-btn" [class.active]="sort_mode() === 'wait'" (click)="sort_mode.set('wait')">By Wait</button>
+          </div>
+        </div>
+        <div class="loc-grid">
+          @for (pred of sortedPredictions(); track pred.location_id) {
+            <div class="loc-card" [class.low]="pred.busyness === 'low'" [class.moderate]="pred.busyness === 'moderate'"
+                 [class.busy]="pred.busyness === 'busy'" [class.very-busy]="pred.busyness === 'very_busy'">
+              <div class="loc-name">{{ pred.location_name }}</div>
+              <div class="loc-occ-bar">
+                <div class="loc-occ-fill" [class]="'fill-' + pred.busyness"
+                     [style.width.%]="(pred.people_count / pred.capacity) * 100"></div>
+              </div>
+              <div class="loc-metrics">
+                <span class="loc-pct">{{ ((pred.people_count / pred.capacity) * 100) | number:'1.0-0' }}%</span>
+                <span class="loc-people">{{ pred.people_count }}/{{ pred.capacity }}</span>
+              </div>
+              <div class="loc-wait-row">
+                <span class="material-symbols-rounded" style="font-size: 14px; color: var(--neutral);">schedule</span>
+                <span class="loc-wait-val">~{{ pred.predicted_wait_minutes }}m</span>
+              </div>
+              <span class="badge" [class.badge-success]="pred.busyness === 'low'"
+                    [class.badge-warning]="pred.busyness === 'moderate' || pred.busyness === 'busy'"
+                    [class.badge-error]="pred.busyness === 'very_busy'">
+                {{ formatBusyness(pred.busyness) }}
+              </span>
+              <div class="loc-trend">
+                <span class="material-symbols-rounded trend-arrow" [class]="'trend-' + pred.trend" style="font-size: 16px;">
+                  {{ pred.trend === 'increasing' ? 'trending_up' : pred.trend === 'decreasing' ? 'trending_down' : 'trending_flat' }}
+                </span>
+              </div>
             </div>
           }
         </div>
       </div>
 
-      <!-- Occupancy chart -->
-      <div class="section chart-section">
-        <div class="section-header">
-          <h3>Occupancy Trend</h3>
-          <div class="sh-controls">
-            <select class="ctrl-select" (change)="chart_location.set(asSelect($event).value)">
-              <option value="all">All Locations</option>
-              @for (loc of cvService.getLocations(); track loc.id) {
-                <option [value]="loc.id">{{ loc.name }}</option>
-              }
-            </select>
-          </div>
+      <!-- Predictions Table (mirrors config-table pattern) -->
+      <div class="card">
+        <div class="card-header">
+          <h3>AI Predictions</h3>
+          <span class="badge badge-info">Real-time</span>
         </div>
-        <div class="chart-wrap">
-          <canvas #occupancyChart width="1100" height="240"></canvas>
-        </div>
-        <div class="chart-legend">
-          @for (loc of chartLegend(); track loc.id; let i = $index) {
-            <span class="cl-item">
-              <span class="cl-dot" [style.background]="chartColors[i % chartColors.length]"></span>
-              {{ loc.name }}
-            </span>
-          }
-        </div>
+        <table class="config-table">
+          <thead>
+            <tr>
+              <th>Location</th>
+              <th>Occupancy</th>
+              <th>Visitors</th>
+              <th>Predicted Wait</th>
+              <th>Trend</th>
+              <th>Confidence</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (pred of cvService.predictions(); track pred.location_id) {
+              <tr>
+                <td>
+                  <span class="material-symbols-rounded svc-icon-sm">location_on</span>
+                  {{ pred.location_name }}
+                </td>
+                <td>
+                  <div class="td-occ">
+                    <div class="td-occ-track">
+                      <div class="td-occ-fill" [class]="'fill-' + pred.busyness"
+                           [style.width.%]="(pred.people_count / pred.capacity) * 100"></div>
+                    </div>
+                    {{ ((pred.people_count / pred.capacity) * 100) | number:'1.0-0' }}%
+                  </div>
+                </td>
+                <td>{{ pred.people_count }}/{{ pred.capacity }}</td>
+                <td><strong>~{{ pred.predicted_wait_minutes }} min</strong></td>
+                <td>
+                  <span class="trend-arrow" [class]="'trend-' + pred.trend">
+                    <span class="material-symbols-rounded" style="font-size: 18px;">
+                      {{ pred.trend === 'increasing' ? 'trending_up' : pred.trend === 'decreasing' ? 'trending_down' : 'trending_flat' }}
+                    </span>
+                  </span>
+                </td>
+                <td>{{ pred.confidence }}%</td>
+                <td>
+                  <span class="badge" [class.badge-success]="pred.busyness === 'low'"
+                        [class.badge-warning]="pred.busyness === 'moderate' || pred.busyness === 'busy'"
+                        [class.badge-error]="pred.busyness === 'very_busy'">
+                    {{ formatBusyness(pred.busyness) }}
+                  </span>
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
       </div>
     </div>
   `,
   styles: [`
-    .analytics { display: flex; flex-direction: column; gap: 16px; }
+    /* Uses same root class and spacing as dashboard */
+    .admin { display: flex; flex-direction: column; gap: 20px; }
 
-    /* Page header */
-    .page-header {
-      display: flex; align-items: center; justify-content: space-between;
-    }
-    .ph-left { display: flex; align-items: center; gap: 10px; }
-    .ph-badge {
-      display: inline-flex; align-items: center; gap: 6px;
-      background: var(--primary-wash); color: var(--primary);
-      padding: 4px 12px; border-radius: 100px;
-      font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;
-    }
-    .ph-dot {
-      width: 6px; height: 6px; border-radius: 50%; background: var(--primary);
-      animation: blink 1.8s infinite;
-    }
-    @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
-    .ph-meta { font-size: 12px; color: var(--neutral); }
-    .ph-ts { font-size: 11px; color: var(--base-300); }
+    /* Stats row — identical to dashboard */
+    .stats-row { display: grid; grid-template-columns: repeat(5, 1fr); gap: 16px; }
+    .stat-card { padding: 16px 20px; }
+    .stat-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+    .stat-icon { font-size: 22px; color: var(--primary); }
+    .stat-change { font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 100px; }
+    .stat-change.positive { background: var(--success-light); color: var(--success); }
+    .stat-change.negative { background: var(--error-light); color: var(--error); }
+    .stat-value { font-size: 28px; font-weight: 800; color: var(--base-content); }
+    .stat-label { font-size: 12px; color: var(--neutral); margin-top: 2px; }
 
-    /* KPI strip */
-    .kpi-strip {
-      display: flex; align-items: stretch;
-      background: var(--base-100);
-      border: 1px solid var(--base-200);
-      border-radius: var(--radius);
-      padding: 20px 0;
-    }
-    .kpi {
-      flex: 1;
-      display: flex; flex-direction: column; align-items: center;
-      gap: 2px; padding: 0 24px;
-    }
-    .kpi-divider { width: 1px; background: var(--base-200); }
-    .kpi-val {
-      font-size: 28px; font-weight: 800; color: var(--base-content);
-      letter-spacing: -1px; line-height: 1;
-    }
-    .kpi-val.kpi-loc { font-size: 16px; font-weight: 700; letter-spacing: 0; }
-    .kpi-unit { font-size: 14px; font-weight: 600; color: var(--neutral); margin-left: 2px; }
-    .kpi-label { font-size: 11px; font-weight: 600; color: var(--neutral); text-transform: uppercase; letter-spacing: 0.5px; margin-top: 4px; }
-    .kpi-sub { font-size: 10px; color: var(--base-300); }
-    .kpi-sub.warn { color: var(--error); }
+    /* Charts row — identical to dashboard */
+    .charts-row { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    .chart-card { padding: 20px; }
+    .chart-card canvas { width: 100%; height: 220px; }
+    .card-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+    .card-header h3 { font-size: 15px; font-weight: 700; }
+    .header-controls { display: flex; align-items: center; gap: 8px; }
 
-    /* Section cards */
-    .section {
-      background: var(--base-100);
-      border: 1px solid var(--base-200);
-      border-radius: var(--radius);
-      padding: 20px;
+    .ctrl-select {
+      padding: 5px 12px; border: 1px solid var(--base-200); border-radius: var(--radius-sm);
+      background: var(--base-100); color: var(--base-content); font-size: 12px;
     }
-    .section-header {
-      display: flex; align-items: center; justify-content: space-between;
-      margin-bottom: 16px;
-    }
-    .section-header h3 { font-size: 14px; font-weight: 700; color: var(--base-content); }
-    .sh-controls { display: flex; gap: 4px; }
     .pill-btn {
       padding: 5px 14px; border-radius: 100px; border: 1px solid var(--base-200);
       background: transparent; color: var(--neutral);
@@ -301,169 +220,106 @@ import { CvService, BusynessLevel, CvPrediction } from '../services/cv.service';
     }
     .pill-btn:hover { border-color: var(--base-300); color: var(--base-content); }
     .pill-btn.active { background: var(--secondary); color: var(--secondary-content); border-color: var(--secondary); }
-    .ctrl-select {
-      padding: 5px 12px; border: 1px solid var(--base-200); border-radius: var(--radius-sm);
-      background: var(--base-100); color: var(--base-content); font-size: 12px;
-    }
 
-    /* Main grid */
-    .main-grid {
-      display: grid; grid-template-columns: 1fr 380px; gap: 16px;
+    .badge-info {
+      display: inline-flex; align-items: center; gap: 6px;
     }
+    .live-dot {
+      width: 6px; height: 6px; border-radius: 50%; background: currentColor;
+      animation: blink 1.8s infinite;
+    }
+    @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
 
-    /* Location cards */
-    .loc-cards { display: flex; flex-direction: column; gap: 8px; }
+    .chart-legend { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 12px; }
+    .cl-item { display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--neutral); }
+    .cl-dot { width: 8px; height: 8px; border-radius: 2px; }
+
+    /* Zone chart (horizontal bars — mirrors CSAT bars pattern) */
+    .zone-chart { display: flex; flex-direction: column; gap: 14px; margin-bottom: 20px; }
+    .zone-bar-row { display: flex; align-items: center; gap: 12px; }
+    .zb-label { width: 120px; font-size: 13px; font-weight: 500; flex-shrink: 0; }
+    .zb-track { flex: 1; height: 24px; background: var(--base-200); border-radius: 12px; overflow: hidden; }
+    .zb-fill {
+      height: 100%; border-radius: 12px;
+      transition: width 0.6s ease, background 0.6s ease;
+    }
+    .zb-pct { font-weight: 700; font-size: 14px; width: 48px; text-align: right; color: var(--base-content); }
+
+    /* Sensor dots */
+    .sensor-summary {
+      display: flex; align-items: center; gap: 12px;
+      padding-top: 16px; border-top: 1px solid var(--base-200);
+    }
+    .ss-label { font-size: 11px; font-weight: 600; color: var(--neutral); text-transform: uppercase; letter-spacing: 0.5px; }
+    .ss-dots { display: flex; gap: 6px; flex-wrap: wrap; }
+    .ss-dot {
+      width: 10px; height: 10px; border-radius: 50%;
+      background: var(--base-300); transition: background 0.3s;
+    }
+    .ss-dot.active { background: var(--success); }
+    .ss-dot.offline { background: var(--error); }
+
+    /* Location grid — mirrors counter-grid */
+    .loc-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
     .loc-card {
-      padding: 14px 16px;
-      border: 1px solid var(--base-200);
+      padding: 16px;
       border-radius: var(--radius-sm);
-      cursor: pointer;
-      transition: all 0.15s;
+      border: 1.5px solid var(--base-200);
+      text-align: center;
+      position: relative;
     }
-    .loc-card:hover { border-color: var(--base-300); box-shadow: var(--shadow); }
-    .loc-card.selected { border-color: var(--primary); background: var(--primary-wash); }
-    .lc-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
-    .lc-name { font-size: 13px; font-weight: 700; color: var(--base-content); }
-    .lc-trend { display: flex; }
-    .trend-increasing { color: #ef4444; }
-    .trend-decreasing { color: #16a34a; }
-    .trend-stable { color: var(--neutral); }
-    .lc-occ-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
-    .lc-occ-track {
-      flex: 1; height: 6px; background: var(--base-200); border-radius: 3px; overflow: hidden;
+    .loc-card.low { border-color: var(--success); background: var(--success-light); }
+    .loc-card.moderate { border-color: var(--warn); background: var(--warn-light); }
+    .loc-card.busy { border-color: #ea580c; background: #fff7ed; }
+    .loc-card.very-busy { border-color: var(--error); background: var(--error-light); }
+    .loc-name { font-weight: 700; font-size: 14px; margin-bottom: 8px; }
+    .loc-occ-bar {
+      height: 6px; background: rgba(0,0,0,0.08); border-radius: 3px; overflow: hidden;
+      margin-bottom: 6px;
     }
-    .lc-occ-fill { height: 100%; border-radius: 3px; transition: width 0.6s ease; }
+    .loc-occ-fill { height: 100%; border-radius: 3px; transition: width 0.6s ease; }
     .fill-low { background: #16a34a; }
     .fill-moderate { background: #ca8a04; }
     .fill-busy { background: #ea580c; }
     .fill-very_busy { background: #dc2626; }
-    .lc-occ-pct { font-size: 11px; font-weight: 700; color: var(--base-content); min-width: 32px; text-align: right; }
-    .lc-bottom { display: flex; align-items: center; gap: 16px; }
-    .lc-stat { display: flex; align-items: baseline; gap: 4px; }
-    .lc-stat-val { font-size: 14px; font-weight: 700; color: var(--base-content); }
-    .lc-stat-label { font-size: 10px; color: var(--neutral); }
-    .lc-badge {
-      margin-left: auto;
-      padding: 2px 10px; border-radius: 100px;
-      font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px;
+    .loc-metrics { display: flex; justify-content: space-between; margin-bottom: 6px; }
+    .loc-pct { font-size: 13px; font-weight: 700; color: var(--base-content); }
+    .loc-people { font-size: 12px; color: var(--neutral); }
+    .loc-wait-row {
+      display: flex; align-items: center; justify-content: center; gap: 4px;
+      margin-bottom: 8px;
     }
-    .b-low { background: #dcfce7; color: #16a34a; }
-    .b-moderate { background: #fef9c3; color: #a16207; }
-    .b-busy { background: #fed7aa; color: #c2410c; }
-    .b-very_busy { background: #fecaca; color: #dc2626; }
+    .loc-wait-val { font-size: 13px; font-weight: 700; color: var(--primary); }
+    .loc-trend { position: absolute; top: 10px; right: 10px; }
+    .trend-arrow { display: flex; }
+    .trend-increasing { color: #ef4444; }
+    .trend-decreasing { color: #16a34a; }
+    .trend-stable { color: var(--neutral); }
 
-    /* Detail panel */
-    .detail-section { display: flex; flex-direction: column; }
-    .detail-block { margin-bottom: 20px; }
-    .db-label {
-      font-size: 11px; font-weight: 700; color: var(--neutral);
-      text-transform: uppercase; letter-spacing: 0.5px;
-      margin-bottom: 12px;
-      display: flex; align-items: center; gap: 6px;
+    /* Config table — identical to dashboard */
+    .config-table { width: 100%; border-collapse: collapse; }
+    .config-table th {
+      text-align: left; font-size: 11px; font-weight: 600;
+      text-transform: uppercase; letter-spacing: 1px;
+      color: var(--neutral); padding: 10px 16px;
+      border-bottom: 2px solid var(--base-200);
     }
-    .db-label-sub { font-weight: 500; text-transform: none; color: var(--base-300); letter-spacing: 0; }
-    .empty-detail {
-      flex: 1; display: flex; flex-direction: column;
-      align-items: center; justify-content: center; gap: 12px;
-      color: var(--neutral); font-size: 13px;
-      min-height: 300px;
+    .config-table td {
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--base-200);
+      font-size: 13px;
     }
+    .config-table tr:last-child td { border-bottom: none; }
+    .svc-icon-sm { font-size: 18px; vertical-align: middle; margin-right: 8px; color: var(--primary); }
+    .td-occ { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--neutral); }
+    .td-occ-track { width: 64px; height: 6px; background: var(--base-200); border-radius: 3px; overflow: hidden; }
+    .td-occ-fill { height: 100%; border-radius: 3px; transition: width 0.5s; }
 
-    /* Zone strip (vertical bars) */
-    .zone-strip { display: flex; gap: 12px; justify-content: space-between; }
-    .zone-cell {
-      flex: 1; display: flex; flex-direction: column; align-items: center; gap: 6px;
+    @media (max-width: 1200px) {
+      .stats-row { grid-template-columns: repeat(3, 1fr); }
+      .charts-row { grid-template-columns: 1fr; }
+      .loc-grid { grid-template-columns: repeat(3, 1fr); }
     }
-    .zc-bar-wrap {
-      width: 100%; height: 80px;
-      background: var(--base-200); border-radius: 6px;
-      display: flex; align-items: flex-end;
-      overflow: hidden;
-    }
-    .zc-bar {
-      width: 100%; border-radius: 6px 6px 0 0;
-      transition: height 0.6s ease, background 0.6s ease;
-      min-height: 4px;
-    }
-    .zc-pct { font-size: 12px; font-weight: 700; color: var(--base-content); }
-    .zc-name { font-size: 9px; color: var(--neutral); text-align: center; font-weight: 600; text-transform: uppercase; letter-spacing: 0.3px; }
-
-    /* Sensor grid */
-    .sensor-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
-    .sensor-card { border-radius: var(--radius-sm); overflow: hidden; border: 1px solid var(--base-200); }
-    .sensor-card.offline { opacity: 0.5; }
-    .sc-feed {
-      height: 64px; background: #0c1222;
-      display: flex; align-items: center; justify-content: center;
-      position: relative; overflow: hidden;
-    }
-    .sc-scanlines {
-      position: absolute; inset: 0;
-      background: repeating-linear-gradient(
-        0deg,
-        transparent, transparent 2px,
-        rgba(255,255,255,0.015) 2px, rgba(255,255,255,0.015) 4px
-      );
-      pointer-events: none;
-    }
-    .sc-icon { color: rgba(255,255,255,0.08); font-size: 28px; }
-    .sc-icon-off { color: rgba(255,255,255,0.2); font-size: 22px; }
-    .sc-count-badge {
-      position: absolute; top: 6px; right: 6px;
-      background: rgba(0,0,0,0.75); backdrop-filter: blur(4px);
-      border-radius: 4px; padding: 2px 6px;
-    }
-    .sc-count { color: #fff; font-size: 13px; font-weight: 700; }
-    .sc-capacity-bar {
-      position: absolute; bottom: 0; left: 0; right: 0;
-      height: 3px; background: rgba(255,255,255,0.06);
-    }
-    .sc-cap-fill {
-      height: 100%;
-      background: linear-gradient(90deg, #16a34a, #ca8a04, #ef4444);
-      transition: width 0.5s;
-    }
-    .sc-meta {
-      display: flex; align-items: center; justify-content: space-between;
-      padding: 6px 8px; background: var(--base-100);
-    }
-    .sc-zone { font-size: 10px; font-weight: 600; color: var(--base-content); }
-    .sc-ratio { font-size: 10px; color: var(--neutral); }
-    .offline-text { color: var(--error); }
-
-    /* Model confidence */
-    .model-row { display: flex; gap: 20px; }
-    .model-stat {
-      flex: 1; display: flex; flex-direction: column; align-items: center; gap: 8px;
-    }
-    .ms-label { font-size: 10px; font-weight: 600; color: var(--neutral); text-transform: uppercase; letter-spacing: 0.3px; }
-    .confidence-ring { position: relative; width: 56px; height: 56px; }
-    .conf-svg { width: 100%; height: 100%; }
-    .conf-val {
-      position: absolute; inset: 0;
-      display: flex; align-items: center; justify-content: center;
-      font-size: 12px; font-weight: 800; color: var(--base-content);
-    }
-    .trend-display {
-      display: flex; align-items: center; gap: 6px;
-      padding: 8px 14px; border-radius: var(--radius-sm);
-      background: var(--base-200);
-    }
-    .trend-display.trend-increasing { background: #fef2f2; color: #dc2626; }
-    .trend-display.trend-decreasing { background: #f0fdf4; color: #16a34a; }
-    .trend-display.trend-stable { background: var(--base-200); color: var(--neutral); }
-    .td-text { font-size: 12px; font-weight: 600; }
-    .wait-display { display: flex; align-items: baseline; gap: 2px; }
-    .wd-val { font-size: 28px; font-weight: 800; color: var(--base-content); line-height: 1; }
-    .wd-unit { font-size: 12px; color: var(--neutral); font-weight: 600; }
-
-    /* Chart */
-    .chart-section { }
-    .chart-wrap { margin-bottom: 12px; }
-    .chart-wrap canvas { width: 100%; height: 200px; }
-    .chart-legend { display: flex; flex-wrap: wrap; gap: 16px; justify-content: center; }
-    .cl-item { display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--neutral); }
-    .cl-dot { width: 8px; height: 8px; border-radius: 2px; }
   `]
 })
 export class CvComponent implements AfterViewInit, OnDestroy {
@@ -477,17 +333,21 @@ export class CvComponent implements AfterViewInit, OnDestroy {
 
   private readonly _occupancyCanvas = viewChild<ElementRef<HTMLCanvasElement>>('occupancyChart');
   private _chart_interval: ReturnType<typeof setInterval> | null = null;
-  private _time_interval: ReturnType<typeof setInterval> | null = null;
-  readonly lastUpdated = signal(this._formatTime());
 
-  readonly activeCameras = computed(() =>
-    this.cvService.cameras().filter(c => c.status === 'active').length
-  );
-
-  readonly avgWait = computed(() => {
+  readonly liveStats = computed(() => {
     const preds = this.cvService.predictions();
-    if (!preds.length) return 0;
-    return Math.round(preds.reduce((s, p) => s + p.predicted_wait_minutes, 0) / preds.length);
+    const avgOcc = this.cvService.avg_occupancy();
+    const avgWait = preds.length ? Math.round(preds.reduce((s, p) => s + p.predicted_wait_minutes, 0) / preds.length) : 0;
+    const activeCams = this.cvService.cameras().filter(c => c.status === 'active').length;
+    const totalCams = this.cvService.cameras().length;
+    const avgConf = preds.length ? Math.round(preds.reduce((s, p) => s + p.confidence, 0) / preds.length) : 0;
+    return [
+      { icon: 'groups', label: 'Total Visitors', value: String(this.cvService.total_people()), change: 'Live', positive: true },
+      { icon: 'donut_small', label: 'Avg Occupancy', value: avgOcc + '%', change: avgOcc > 65 ? 'High' : 'Normal', positive: avgOcc <= 65 },
+      { icon: 'schedule', label: 'Avg Wait (AI)', value: avgWait + 'm', change: avgWait < 15 ? 'Good' : 'Elevated', positive: avgWait < 15 },
+      { icon: 'videocam', label: 'Active Sensors', value: activeCams + '/' + totalCams, change: activeCams === totalCams ? 'All Online' : (totalCams - activeCams) + ' Offline', positive: activeCams === totalCams },
+      { icon: 'psychology', label: 'Model Confidence', value: avgConf + '%', change: avgConf > 85 ? 'High' : 'Moderate', positive: avgConf > 85 },
+    ];
   });
 
   readonly sortedPredictions = computed(() => {
@@ -496,11 +356,6 @@ export class CvComponent implements AfterViewInit, OnDestroy {
       return preds.sort((a, b) => (b.people_count / b.capacity) - (a.people_count / a.capacity));
     }
     return preds.sort((a, b) => b.predicted_wait_minutes - a.predicted_wait_minutes);
-  });
-
-  readonly selectedPrediction = computed(() => {
-    const id = this.selected_location();
-    return this.cvService.predictions().find(p => p.location_id === id) ?? null;
   });
 
   readonly currentHeatmap = computed(() => {
@@ -524,15 +379,11 @@ export class CvComponent implements AfterViewInit, OnDestroy {
 
   ngAfterViewInit(): void {
     setTimeout(() => this._drawChart(), 50);
-    this._chart_interval = setInterval(() => {
-      this._drawChart();
-      this.lastUpdated.set(this._formatTime());
-    }, 5000);
+    this._chart_interval = setInterval(() => this._drawChart(), 5000);
   }
 
   ngOnDestroy(): void {
     if (this._chart_interval) clearInterval(this._chart_interval);
-    if (this._time_interval) clearInterval(this._time_interval);
   }
 
   getHeatColor(intensity: number): string {
@@ -547,10 +398,6 @@ export class CvComponent implements AfterViewInit, OnDestroy {
       low: 'Low', moderate: 'Moderate', busy: 'Busy', very_busy: 'Very Busy',
     };
     return map[level];
-  }
-
-  private _formatTime(): string {
-    return new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
   }
 
   private _drawChart(): void {
@@ -579,7 +426,7 @@ export class CvComponent implements AfterViewInit, OnDestroy {
       ? this.cvService.getLocations()
       : this.cvService.getLocations().filter(l => l.id === loc_filter);
 
-    // Grid lines
+    // Grid
     ctx.strokeStyle = 'rgba(0,0,0,0.06)';
     ctx.lineWidth = 1;
     for (let i = 0; i <= 4; i++) {
@@ -589,12 +436,11 @@ export class CvComponent implements AfterViewInit, OnDestroy {
       ctx.lineTo(pad.left + chartW, y);
       ctx.stroke();
       ctx.fillStyle = '#9ca3af';
-      ctx.font = '10px -apple-system, sans-serif';
+      ctx.font = '10px Roboto, sans-serif';
       ctx.textAlign = 'right';
       ctx.fillText(`${100 - i * 25}%`, pad.left - 8, y + 3);
     }
 
-    // Plot lines
     for (let li = 0; li < locations.length; li++) {
       const loc = locations[li];
       const points = history
@@ -607,7 +453,7 @@ export class CvComponent implements AfterViewInit, OnDestroy {
       const range = maxT - minT || 1;
       const color = this.chartColors[li % this.chartColors.length];
 
-      // Area fill
+      // Area
       ctx.beginPath();
       for (let i = 0; i < points.length; i++) {
         const x = pad.left + ((points[i].timestamp.getTime() - minT) / range) * chartW;
@@ -618,7 +464,10 @@ export class CvComponent implements AfterViewInit, OnDestroy {
       ctx.lineTo(pad.left + chartW, pad.top + chartH);
       ctx.lineTo(pad.left, pad.top + chartH);
       ctx.closePath();
-      ctx.fillStyle = color + '0a';
+      const grad = ctx.createLinearGradient(0, pad.top, 0, pad.top + chartH);
+      grad.addColorStop(0, color + '18');
+      grad.addColorStop(1, color + '02');
+      ctx.fillStyle = grad;
       ctx.fill();
 
       // Line
@@ -630,7 +479,8 @@ export class CvComponent implements AfterViewInit, OnDestroy {
         else ctx.lineTo(x, y);
       }
       ctx.strokeStyle = color;
-      ctx.lineWidth = 2;
+      ctx.lineWidth = 2.5;
+      ctx.lineJoin = 'round';
       ctx.stroke();
 
       // End dot
@@ -650,7 +500,7 @@ export class CvComponent implements AfterViewInit, OnDestroy {
       const maxT = all_points[all_points.length - 1].timestamp.getTime();
       const range = maxT - minT || 1;
       ctx.fillStyle = '#9ca3af';
-      ctx.font = '10px -apple-system, sans-serif';
+      ctx.font = '10px Roboto, sans-serif';
       ctx.textAlign = 'center';
       const step = Math.max(1, Math.floor(all_points.length / 8));
       const seen = new Set<string>();
