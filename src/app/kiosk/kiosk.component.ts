@@ -18,6 +18,20 @@ type KioskView = 'idle' | 'menu' | 'qr' | 'manual' | 'walkin' | 'confirm';
           <h1 class="idle-title">PlaceOS</h1>
           <p class="idle-subtitle">LA County Registrar-Recorder/County Clerk</p>
           <div class="idle-divider"></div>
+          <div class="idle-waits">
+            <div class="idle-waits-label">Current Estimated Wait Times</div>
+            <div class="idle-waits-grid">
+              @for (svc of queueService.services(); track svc.id) {
+                @if (svc.walkInsEnabled) {
+                  <div class="idle-wait-chip">
+                    <span class="material-symbols-rounded" style="font-size: 16px;">{{ svc.icon }}</span>
+                    <span class="chip-name">{{ svc.name }}</span>
+                    <span class="chip-time" [class.short]="getServiceWait(svc.id) < 10" [class.long]="getServiceWait(svc.id) >= 20">~{{ getServiceWait(svc.id) }}m</span>
+                  </div>
+                }
+              }
+            </div>
+          </div>
           <p class="idle-cta">Tap anywhere to check in</p>
           <div class="idle-pulse"></div>
         </div>
@@ -199,6 +213,41 @@ type KioskView = 'idle' | 'menu' | 'qr' | 'manual' | 'walkin' | 'confirm';
     .idle-title { font-size: 48px; font-weight: 800; letter-spacing: -1px; margin-bottom: 8px; }
     .idle-subtitle { font-size: 18px; opacity: 0.7; margin-bottom: 32px; }
     .idle-divider { width: 60px; height: 3px; background: var(--accent); margin: 0 auto 32px; border-radius: 2px; }
+    .idle-waits {
+      margin-bottom: 32px;
+      width: 100%;
+      max-width: 600px;
+    }
+    .idle-waits-label {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+      opacity: 0.4;
+      margin-bottom: 12px;
+    }
+    .idle-waits-grid {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      justify-content: center;
+    }
+    .idle-wait-chip {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(255,255,255,0.08);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 100px;
+      padding: 6px 14px 6px 10px;
+      font-size: 12px;
+    }
+    .chip-name { opacity: 0.7; }
+    .chip-time {
+      font-weight: 700;
+      color: rgba(255,255,255,0.9);
+    }
+    .chip-time.short { color: var(--accent); }
+    .chip-time.long { color: hsl(0, 70%, 65%); }
     .idle-cta { font-size: 20px; opacity: 0.6; animation: breathe 3s ease-in-out infinite; }
     .idle-pulse {
       width: 12px; height: 12px;
