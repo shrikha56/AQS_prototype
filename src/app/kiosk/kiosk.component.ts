@@ -26,7 +26,7 @@ type KioskView = 'idle' | 'menu' | 'qr' | 'manual' | 'walkin' | 'confirm';
                   <div class="idle-wait-chip">
                     <span class="material-symbols-rounded" style="font-size: 16px;">{{ svc.icon }}</span>
                     <span class="chip-name">{{ svc.name }}</span>
-                    <span class="chip-time" [class.short]="getServiceWait(svc.id) < 10" [class.long]="getServiceWait(svc.id) >= 20">~{{ getServiceWait(svc.id) }}m</span>
+                    <span class="chip-time">~{{ getServiceWait(svc.id) }}m</span>
                   </div>
                 }
               }
@@ -234,10 +234,8 @@ type KioskView = 'idle' | 'menu' | 'qr' | 'manual' | 'walkin' | 'confirm';
     .chip-name { opacity: 0.7; }
     .chip-time {
       font-weight: 700;
-      color: rgba(255,255,255,0.9);
+      color: var(--accent);
     }
-    .chip-time.short { color: var(--accent); }
-    .chip-time.long { color: hsl(0, 70%, 65%); }
     .idle-cta { font-size: 20px; opacity: 0.6; animation: breathe 3s ease-in-out infinite; }
     .idle-pulse {
       width: 12px; height: 12px;
