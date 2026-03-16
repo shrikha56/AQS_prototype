@@ -75,7 +75,7 @@ import { CvService, BusynessLevel, CvPrediction } from '../services/cv.service';
             }
           </div>
           <div class="sensor-summary">
-            <span class="ss-label">Active Sensors</span>
+            <span class="ss-label">Sensors {{ activeLocationCameras() }}/{{ locationCameras().length }}</span>
             <div class="ss-dots">
               @for (cam of locationCameras(); track cam.id) {
                 <div class="ss-dot" [class.active]="cam.status === 'active'" [class.offline]="cam.status === 'offline'"
@@ -365,6 +365,10 @@ export class CvComponent implements AfterViewInit, OnDestroy {
 
   readonly locationCameras = computed(() =>
     this.cvService.cameras().filter(c => c.location_id === this.selected_location())
+  );
+
+  readonly activeLocationCameras = computed(() =>
+    this.locationCameras().filter(c => c.status === 'active').length
   );
 
   readonly chartLegend = computed(() => {
