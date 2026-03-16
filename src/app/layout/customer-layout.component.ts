@@ -6,7 +6,7 @@ import { Router, RouterOutlet, RouterLink, RouterLinkActive } from '@angular/rou
   standalone: true,
   imports: [RouterOutlet, RouterLink, RouterLinkActive],
   template: `
-    <div class="layout">
+    <div class="layout" [class.fullscreen-mode]="isFullscreen()">
       <aside class="sidebar">
         <a routerLink="/booking" class="logo" aria-label="Home">
           <span class="logo-icon">
@@ -206,6 +206,12 @@ import { Router, RouterOutlet, RouterLink, RouterLinkActive } from '@angular/rou
     }
     .content.fullscreen { padding: 0; }
 
+    /* Kiosk & Queue are dedicated screens — hide chrome */
+    :host-context(.fullscreen-mode) .sidebar { display: none; }
+    :host-context(.fullscreen-mode) .topbar { display: none; }
+    .fullscreen-mode .sidebar { display: none; }
+    .fullscreen-mode .topbar { display: none; }
+
     @media (max-width: 768px) {
       .sidebar { width: 64px; padding: 16px 8px; }
       .logo-text { display: none; }
@@ -220,16 +226,16 @@ export class CustomerLayoutComponent {
 
   readonly navItems = [
     { path: '/booking', label: 'Book Appointment', icon: 'calendar_month' },
-    { path: '/kiosk', label: 'Self Check-In', icon: 'desktop_windows' },
-    { path: '/queue', label: 'Queue Status', icon: 'groups' },
+    { path: '/kiosk', label: 'Check-In Kiosk', icon: 'desktop_windows' },
+    { path: '/queue', label: 'Queue Display', icon: 'groups' },
   ];
 
   getPageTitle(): string {
     const url = this._router.url;
     const titles: Record<string, string> = {
       '/booking': 'Book an Appointment',
-      '/kiosk': 'Self-Service Check-In',
-      '/queue': 'Queue Status',
+      '/kiosk': 'Check-In Kiosk',
+      '/queue': 'Queue Display',
     };
     return titles[url] ?? 'AQS';
   }
