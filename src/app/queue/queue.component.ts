@@ -1,5 +1,6 @@
-import { Component, inject, signal, OnInit, OnDestroy } from '@angular/core';
+import { Component, inject, signal, computed, OnInit, OnDestroy } from '@angular/core';
 import { QueueService } from '../services/queue.service';
+import { CvService } from '../services/cv.service';
 
 @Component({
   selector: 'app-queue',
@@ -22,7 +23,7 @@ import { QueueService } from '../services/queue.service';
               <div class="next-ticket mono">{{ item.ticket }}</div>
               <div class="next-info">
                 <div class="next-service">{{ item.service }}</div>
-                <div class="next-wait">{{ getWaitTime(item.checkInTime) }} min wait</div>
+                <div class="next-wait">~{{ getAiWait(i) }} min wait (AI)</div>
               </div>
             </div>
           }
@@ -48,6 +49,13 @@ import { QueueService } from '../services/queue.service';
           <div class="stat">
             <span class="stat-value">{{ queueService.avgWaitMinutes() }}m</span>
             <span class="stat-label">Avg Wait</span>
+          </div>
+          <div class="stat ai-stat">
+            <span class="stat-value">~{{ cvPredictedWait() }}m</span>
+            <span class="stat-label">
+              <span class="material-symbols-rounded" style="font-size: 10px; vertical-align: middle;">visibility</span>
+              AI Est.
+            </span>
           </div>
         </div>
         <div class="footer-message">
@@ -167,6 +175,8 @@ import { QueueService } from '../services/queue.service';
     .stat { display: flex; flex-direction: column; align-items: center; }
     .stat-value { font-size: 18px; font-weight: 700; color: var(--accent); }
     .stat-label { font-size: 10px; color: rgba(255,255,255,0.4); text-transform: uppercase; letter-spacing: 1px; }
+    .ai-stat .stat-value { color: var(--primary); }
+    .ai-stat .stat-label { color: rgba(255,255,255,0.5); }
     .footer-message {
       flex: 1;
       overflow: hidden;
@@ -192,6 +202,7 @@ import { QueueService } from '../services/queue.service';
 })
 export class QueueComponent implements OnInit, OnDestroy {
   readonly queueService = inject(QueueService);
+  readonly cvService = inject(CvService);
 
   readonly currentTime = signal('');
   readonly isCycling = signal(false);
@@ -243,4 +254,13 @@ export class QueueComponent implements OnInit, OnDestroy {
   getWaitTime(checkIn: Date): number {
     return Math.round((new Date().getTime() - checkIn.getTime()) / 60000);
   }
+
+  getAiWait(position: number): number {
+    return this.cvService.getEstimatedWaitForQueue(position + 1, '', 'norwalk');
+  }
+
+  cvPredictedWait = computed(() => {
+    const pred = this.cvService.getPredictionForLocation('norwalk');
+    return pred?.predicted_wait_minutes ?? 0;
+  });
 }

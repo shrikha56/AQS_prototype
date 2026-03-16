@@ -21,6 +21,7 @@ export const routes: Routes = [
       { path: 'dashboard', loadComponent: () => import('./admin/admin.component').then(m => m.AdminComponent) },
       { path: 'staff', loadComponent: () => import('./staff/staff.component').then(m => m.StaffComponent) },
       { path: 'signage', loadComponent: () => import('./signage/signage-admin.component').then(m => m.SignageAdminComponent) },
+      { path: 'cv', loadComponent: () => import('./cv/cv.component').then(m => m.CvComponent) },
     ],
   },
 ];

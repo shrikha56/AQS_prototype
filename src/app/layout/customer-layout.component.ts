@@ -15,6 +15,7 @@ import { Router, RouterOutlet, RouterLink, RouterLinkActive } from '@angular/rou
           <div class="logo-text">
             <span class="logo-name">LA County</span>
             <span class="logo-sub">RR/CC</span>
+            <span class="powered-by">Powered by PlaceOS</span>
           </div>
         </a>
         <nav class="nav">
@@ -98,6 +99,12 @@ import { Router, RouterOutlet, RouterLink, RouterLinkActive } from '@angular/rou
       font-size: 11px;
       color: rgba(255,255,255,0.4);
       font-weight: 500;
+    }
+    .powered-by {
+      font-size: 9px;
+      color: rgba(255,255,255,0.25);
+      font-weight: 500;
+      margin-top: 2px;
     }
 
     /* Nav */

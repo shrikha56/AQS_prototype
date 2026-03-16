@@ -1,5 +1,6 @@
 import { Component, inject, signal } from '@angular/core';
 import { QueueService } from '../services/queue.service';
+import { CvService } from '../services/cv.service';
 
 @Component({
   selector: 'app-booking',
@@ -39,8 +40,12 @@ import { QueueService } from '../services/queue.service';
                   <p>{{ loc.address }}</p>
                 </div>
                 <div class="loc-wait">
-                  <span class="wait-badge" [class.low]="loc.waitTime < 15" [class.med]="loc.waitTime >= 15 && loc.waitTime < 25" [class.high]="loc.waitTime >= 25">
-                    ~{{ loc.waitTime }} min
+                  <span class="wait-badge" [class.low]="getCvWait(loc.id) < 10" [class.med]="getCvWait(loc.id) >= 10 && getCvWait(loc.id) < 20" [class.high]="getCvWait(loc.id) >= 20">
+                    ~{{ getCvWait(loc.id) }} min
+                  </span>
+                  <span class="cv-label">
+                    <span class="material-symbols-rounded" style="font-size: 11px;">visibility</span>
+                    AI Predicted
                   </span>
                 </div>
               </div>
@@ -219,6 +224,13 @@ import { QueueService } from '../services/queue.service';
                 <span class="label">JEDI Reference</span>
                 <span class="value mono">{{ jediRef() }}</span>
               </div>
+              <div class="detail-row ai-row">
+                <span class="label">
+                  <span class="material-symbols-rounded" style="font-size: 14px; vertical-align: middle;">visibility</span>
+                  Estimated Wait (AI)
+                </span>
+                <span class="value">~{{ getCvWait(selectedLocation()) }} min</span>
+              </div>
             </div>
             <div class="qr-placeholder">
               <div class="qr-box">
@@ -322,6 +334,14 @@ import { QueueService } from '../services/queue.service';
     .wait-badge.low { background: var(--success-light); color: var(--success); }
     .wait-badge.med { background: var(--warn-light); color: var(--warn); }
     .wait-badge.high { background: var(--error-light); color: var(--error); }
+    .cv-label {
+      display: flex; align-items: center; gap: 3px;
+      font-size: 9px; color: var(--neutral);
+      margin-top: 4px; justify-content: flex-end;
+    }
+    .loc-wait { display: flex; flex-direction: column; align-items: flex-end; }
+    .ai-row { background: var(--primary-wash); border-radius: 8px; padding: 10px 12px !important; }
+    .ai-row .label { color: var(--primary); }
 
     .walkin-banner {
       display: flex;
@@ -460,6 +480,7 @@ import { QueueService } from '../services/queue.service';
 })
 export class BookingComponent {
   readonly queueService = inject(QueueService);
+  private readonly _cvService = inject(CvService);
 
   readonly step = signal(1);
   readonly selectedLocation = signal<string | null>(null);
@@ -547,6 +568,12 @@ export class BookingComponent {
     this.bookingRef.set(ref);
     this.jediRef.set(jedi);
     this.step.set(5);
+  }
+
+  getCvWait(location_id: string | null): number {
+    if (!location_id) return 0;
+    const pred = this._cvService.getPredictionForLocation(location_id);
+    return pred?.predicted_wait_minutes ?? 10;
   }
 
   resetBooking(): void {

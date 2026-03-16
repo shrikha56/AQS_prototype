@@ -10,6 +10,10 @@ import { Router, RouterOutlet, RouterLink, RouterLinkActive } from '@angular/rou
       <aside class="sidebar">
         <div class="logo">
           <span class="logo-mark">AQS</span>
+          <div class="logo-text">
+            <span class="logo-name">PlaceOS</span>
+            <span class="logo-sub">AQS Platform</span>
+          </div>
         </div>
         <nav class="nav">
           @for (item of navItems; track item.path) {
@@ -94,6 +98,18 @@ import { Router, RouterOutlet, RouterLink, RouterLinkActive } from '@angular/rou
       font-weight: 700;
       font-size: 13px;
       letter-spacing: -0.5px;
+      flex-shrink: 0;
+    }
+    .logo-text { display: flex; flex-direction: column; line-height: 1.15; }
+    .logo-name {
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--secondary-content);
+    }
+    .logo-sub {
+      font-size: 10px;
+      color: rgba(255,255,255,0.4);
+      font-weight: 500;
     }
     .nav {
       display: flex;
@@ -233,6 +249,7 @@ export class AdminLayoutComponent {
     { path: '/admin/dashboard', label: 'Dashboard', icon: 'dashboard' },
     { path: '/admin/staff', label: 'Staff Console', icon: 'person' },
     { path: '/admin/signage', label: 'Signage', icon: 'tv_signin' },
+    { path: '/admin/cv', label: 'Computer Vision', icon: 'visibility' },
   ];
 
   getPageTitle(): string {
@@ -241,6 +258,7 @@ export class AdminLayoutComponent {
       '/admin/dashboard': 'Admin Dashboard',
       '/admin/staff': 'Staff Console',
       '/admin/signage': 'Signage Manager',
+      '/admin/cv': 'Computer Vision Analytics',
     };
     return titles[url] ?? 'Admin';
   }
