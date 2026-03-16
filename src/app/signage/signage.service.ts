@@ -258,7 +258,49 @@ export class SignageService {
     });
   }
 
-  // ── Display management ──
+  // ── Display CRUD ──
+
+  addDisplay(item: Omit<SignageDisplay, 'id'>): string {
+    const id = generateId('dsp');
+    this.displays.update(list => [...list, { ...item, id }]);
+    // Add to zone
+    if (item.zone_id) {
+      this.zones.update(list => list.map(z =>
+        z.id === item.zone_id ? { ...z, display_ids: [...z.display_ids, id] } : z
+      ));
+    }
+    return id;
+  }
+
+  deleteDisplay(id: string): void {
+    this.displays.update(list => list.filter(d => d.id !== id));
+    this.zones.update(list => list.map(z => ({
+      ...z,
+      display_ids: z.display_ids.filter(did => did !== id),
+    })));
+  }
+
+  // ── Zone CRUD ──
+
+  addZone(item: Omit<SignageZone, 'id'>): string {
+    const id = generateId('zone');
+    this.zones.update(list => [...list, { ...item, id }]);
+    return id;
+  }
+
+  deleteZone(id: string): void {
+    this.zones.update(list => list.filter(z => z.id !== id));
+    // Unassign displays from this zone
+    this.displays.update(list => list.map(d =>
+      d.zone_id === id ? { ...d, zone_id: '' } : d
+    ));
+    // Remove schedules targeting this zone
+    this.schedules.update(list => list.filter(s => s.zone_id !== id));
+  }
+
+  updateZone(id: string, changes: Partial<SignageZone>): void {
+    this.zones.update(list => list.map(z => z.id === id ? { ...z, ...changes } : z));
+  }
 
   assignPlaylist(display_id: string, playlist_id: string): void {
     this.displays.update(list => list.map(d =>

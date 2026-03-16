@@ -25,10 +25,12 @@ type ModalType =
   | 'add-media-to-playlist'
   | 'select-playlist-for-media'
   | 'add-schedule'
+  | 'add-display'
+  | 'add-zone'
   | 'confirm-delete';
 
 interface ConfirmDeletePayload {
-  entity: 'media' | 'playlist' | 'schedule';
+  entity: 'media' | 'playlist' | 'schedule' | 'display' | 'zone';
   id: string;
   name: string;
 }
@@ -116,6 +118,10 @@ interface ConfirmDeletePayload {
                   <option [value]="zone.id">{{ zone.name }}</option>
                 }
               </select>
+              <button class="btn btn-primary btn-sm" (click)="openAddDisplay()">
+                <span class="material-symbols-rounded" style="font-size: 16px;">add</span>
+                Add Display
+              </button>
             </div>
           </div>
           <table class="data-table">
@@ -170,6 +176,10 @@ interface ConfirmDeletePayload {
                       <button class="icon-btn" title="Preview" aria-label="Preview display"
                               (click)="previewDisplay.set(previewDisplay() === display.id ? null : display.id)">
                         <span class="material-symbols-rounded">visibility</span>
+                      </button>
+                      <button class="icon-btn" title="Delete display" aria-label="Delete display"
+                              (click)="confirmDelete('display', display.id, display.name)">
+                        <span class="material-symbols-rounded">delete</span>
                       </button>
                     </div>
                   </td>
@@ -571,8 +581,14 @@ interface ConfirmDeletePayload {
       @if (activeTab() === 'zones') {
         <div class="zones-layout">
           <div class="card zones-list-card">
-            <div class="card-header">
-              <h3>Zones</h3>
+            <div class="card-header" style="flex-direction: column; align-items: stretch; gap: 8px;">
+              <div style="display: flex; align-items: center; justify-content: space-between;">
+                <h3>Zones</h3>
+                <button class="btn btn-primary btn-sm" (click)="openAddZone()">
+                  <span class="material-symbols-rounded" style="font-size: 16px;">add</span>
+                  Add
+                </button>
+              </div>
               <div class="search-box">
                 <span class="material-symbols-rounded search-icon">search</span>
                 <input type="text" placeholder="Search zones..." [value]="zone_search()" (input)="zone_search.set(asInput($event).value)">
@@ -585,6 +601,10 @@ interface ConfirmDeletePayload {
                   <div class="zone-item-name">{{ zone.name }}</div>
                   <div class="zone-item-meta">{{ zone.display_ids.length }} displays, {{ zone.playlist_ids.length }} playlists</div>
                 </div>
+                <button class="icon-btn" style="flex-shrink: 0;" title="Delete zone" aria-label="Delete zone"
+                  (click)="$event.stopPropagation(); confirmDelete('zone', zone.id, zone.name)">
+                  <span class="material-symbols-rounded">delete</span>
+                </button>
                 <span class="material-symbols-rounded" style="font-size: 18px; color: var(--neutral);">chevron_right</span>
               </div>
             }
@@ -1043,6 +1063,61 @@ interface ConfirmDeletePayload {
               <div class="modal-footer">
                 <button class="btn btn-outline" (click)="closeModal()">Cancel</button>
                 <button class="btn btn-primary" [disabled]="!form_sch_name() || !form_sch_playlist_id() || !form_sch_zone_id()" (click)="submitAddSchedule()">Create Schedule</button>
+              </div>
+            </div>
+          }
+
+          <!-- Add Display Modal -->
+          @if (active_modal() === 'add-display') {
+            <div class="modal-panel">
+              <div class="modal-header">
+                <h3>Add Display</h3>
+                <button class="icon-btn" (click)="closeModal()"><span class="material-symbols-rounded">close</span></button>
+              </div>
+              <div class="modal-body">
+                <label class="form-label">Display Name</label>
+                <input type="text" class="form-input" placeholder="e.g. Lobby Screen 1" [value]="form_dsp_name()" (input)="form_dsp_name.set(asInput($event).value)">
+                <label class="form-label">Location</label>
+                <input type="text" class="form-input" placeholder="e.g. Main Lobby, Counter Area" [value]="form_dsp_location()" (input)="form_dsp_location.set(asInput($event).value)">
+                <label class="form-label">Zone</label>
+                <select class="form-input" [value]="form_dsp_zone_id()" (change)="form_dsp_zone_id.set(asSelect($event).value)">
+                  <option value="">— Select Zone —</option>
+                  @for (z of signageService.zones(); track z.id) {
+                    <option [value]="z.id">{{ z.name }}</option>
+                  }
+                </select>
+                <label class="form-label">Resolution</label>
+                <select class="form-input" [value]="form_dsp_resolution()" (change)="form_dsp_resolution.set(asSelect($event).value)">
+                  <option value="1920x1080">1920 × 1080 (Full HD)</option>
+                  <option value="3840x2160">3840 × 2160 (4K)</option>
+                  <option value="1080x1920">1080 × 1920 (Portrait FHD)</option>
+                  <option value="2160x3840">2160 × 3840 (Portrait 4K)</option>
+                  <option value="1280x720">1280 × 720 (HD)</option>
+                </select>
+              </div>
+              <div class="modal-footer">
+                <button class="btn btn-outline" (click)="closeModal()">Cancel</button>
+                <button class="btn btn-primary" [disabled]="!form_dsp_name() || !form_dsp_zone_id()" (click)="submitAddDisplay()">Add Display</button>
+              </div>
+            </div>
+          }
+
+          <!-- Add Zone Modal -->
+          @if (active_modal() === 'add-zone') {
+            <div class="modal-panel">
+              <div class="modal-header">
+                <h3>Add Zone</h3>
+                <button class="icon-btn" (click)="closeModal()"><span class="material-symbols-rounded">close</span></button>
+              </div>
+              <div class="modal-body">
+                <label class="form-label">Zone Name</label>
+                <input type="text" class="form-input" placeholder="e.g. Norwalk HQ" [value]="form_zone_name()" (input)="form_zone_name.set(asInput($event).value)">
+                <label class="form-label">Location ID</label>
+                <input type="text" class="form-input" placeholder="e.g. norwalk, lancaster" [value]="form_zone_location()" (input)="form_zone_location.set(asInput($event).value)">
+              </div>
+              <div class="modal-footer">
+                <button class="btn btn-outline" (click)="closeModal()">Cancel</button>
+                <button class="btn btn-primary" [disabled]="!form_zone_name()" (click)="submitAddZone()">Create Zone</button>
               </div>
             </div>
           }
@@ -1822,6 +1897,16 @@ export class SignageAdminComponent {
   readonly form_sch_cron = signal('0 8 * * 1-5');
   readonly form_sch_priority = signal(10);
 
+  // Display form
+  readonly form_dsp_name = signal('');
+  readonly form_dsp_location = signal('');
+  readonly form_dsp_zone_id = signal('');
+  readonly form_dsp_resolution = signal('1920x1080');
+
+  // Zone form
+  readonly form_zone_name = signal('');
+  readonly form_zone_location = signal('');
+
   // Schedule timeline
   readonly timeline_date = signal(new Date());
   readonly schedule_view_mode = signal<'display' | 'zone'>('zone');
@@ -2266,9 +2351,50 @@ export class SignageAdminComponent {
     return this.signageService.schedules().filter(s => s.zone_id === zone_id);
   }
 
+  // ── Display CRUD ──
+
+  openAddDisplay(): void {
+    this.form_dsp_name.set('');
+    this.form_dsp_location.set('');
+    this.form_dsp_zone_id.set('');
+    this.form_dsp_resolution.set('1920x1080');
+    this.active_modal.set('add-display');
+  }
+
+  submitAddDisplay(): void {
+    this.signageService.addDisplay({
+      name: this.form_dsp_name(),
+      location: this.form_dsp_location(),
+      zone_id: this.form_dsp_zone_id(),
+      status: 'online',
+      resolution: this.form_dsp_resolution(),
+      assigned_playlist_ids: [],
+      last_heartbeat: new Date(),
+    });
+    this.closeModal();
+  }
+
+  // ── Zone CRUD ──
+
+  openAddZone(): void {
+    this.form_zone_name.set('');
+    this.form_zone_location.set('');
+    this.active_modal.set('add-zone');
+  }
+
+  submitAddZone(): void {
+    this.signageService.addZone({
+      name: this.form_zone_name(),
+      location_id: this.form_zone_location(),
+      display_ids: [],
+      playlist_ids: [],
+    });
+    this.closeModal();
+  }
+
   // ── Delete confirmation ──
 
-  confirmDelete(entity: 'media' | 'playlist' | 'schedule', id: string, name: string): void {
+  confirmDelete(entity: 'media' | 'playlist' | 'schedule' | 'display' | 'zone', id: string, name: string): void {
     this.delete_payload.set({ entity, id, name });
     this.active_modal.set('confirm-delete');
   }
@@ -2285,6 +2411,12 @@ export class SignageAdminComponent {
         break;
       case 'schedule':
         this.signageService.deleteSchedule(payload.id);
+        break;
+      case 'display':
+        this.signageService.deleteDisplay(payload.id);
+        break;
+      case 'zone':
+        this.signageService.deleteZone(payload.id);
         break;
     }
     this.closeModal();
