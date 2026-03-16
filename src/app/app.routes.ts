@@ -7,4 +7,5 @@ export const routes: Routes = [
   { path: 'queue', loadComponent: () => import('./queue/queue.component').then(m => m.QueueComponent) },
   { path: 'staff', loadComponent: () => import('./staff/staff.component').then(m => m.StaffComponent) },
   { path: 'admin', loadComponent: () => import('./admin/admin.component').then(m => m.AdminComponent) },
+  { path: 'signage', loadComponent: () => import('./signage/signage-admin.component').then(m => m.SignageAdminComponent) },
 ];

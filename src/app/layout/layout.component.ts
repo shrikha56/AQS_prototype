@@ -197,6 +197,7 @@ export class LayoutComponent {
     { path: '/queue', label: 'Queue Display', icon: 'groups' },
     { path: '/staff', label: 'Staff Dashboard', icon: 'person' },
     { path: '/admin', label: 'Admin Console', icon: 'admin_panel_settings' },
+    { path: '/signage', label: 'Signage Manager', icon: 'tv_signin' },
   ];
 
   getPageTitle(): string {
@@ -207,6 +208,7 @@ export class LayoutComponent {
       '/queue': 'Queue Display',
       '/staff': 'Staff Dashboard',
       '/admin': 'Admin Console',
+      '/signage': 'Signage Manager',
     };
     return titles[url] ?? 'AQS System';
   }
