@@ -249,7 +249,7 @@ export class AdminLayoutComponent {
     { path: '/admin/dashboard', label: 'Dashboard', icon: 'dashboard' },
     { path: '/admin/staff', label: 'Staff Console', icon: 'person' },
     { path: '/admin/signage', label: 'Signage', icon: 'tv_signin' },
-    { path: '/admin/cv', label: 'Computer Vision', icon: 'visibility' },
+    { path: '/admin/cv', label: 'Analytics', icon: 'monitoring' },
   ];
 
   getPageTitle(): string {
@@ -258,7 +258,7 @@ export class AdminLayoutComponent {
       '/admin/dashboard': 'Admin Dashboard',
       '/admin/staff': 'Staff Console',
       '/admin/signage': 'Signage Manager',
-      '/admin/cv': 'Computer Vision Analytics',
+      '/admin/cv': 'Occupancy Analytics',
     };
     return titles[url] ?? 'Admin';
   }
