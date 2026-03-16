@@ -240,6 +240,7 @@ export class QueueComponent implements OnInit, OnDestroy {
   private _cycleInterval: ReturnType<typeof setInterval> | null = null;
   private _lastAnnouncedTicket = '';
   private _synth = typeof window !== 'undefined' ? window.speechSynthesis : null;
+  private _audioUnlocked = false;
 
   constructor() {
     // Watch for changes in the currently serving ticket and announce
@@ -316,6 +317,24 @@ export class QueueComponent implements OnInit, OnDestroy {
 
   toggleSound(): void {
     this.soundEnabled.update(v => !v);
+    // Unlock audio on first user interaction
+    if (!this._audioUnlocked) {
+      this._unlockAudio();
+    }
+  }
+
+  private _unlockAudio(): void {
+    this._audioUnlocked = true;
+    // Browsers require a user gesture to unlock AudioContext + SpeechSynthesis
+    try {
+      const ctx = new AudioContext();
+      ctx.resume().then(() => ctx.close());
+    } catch { /* ignore */ }
+    if (this._synth) {
+      const u = new SpeechSynthesisUtterance('');
+      u.volume = 0;
+      this._synth.speak(u);
+    }
   }
 
   private _announce(ticket: string, counter: number): void {
@@ -326,39 +345,42 @@ export class QueueComponent implements OnInit, OnDestroy {
     const text = `Now serving, ${spellTicket}, at counter ${counter}.`;
 
     // Play a brief chime tone before speaking
-    try {
-      const ctx = new AudioContext();
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      osc.frequency.value = 880;
-      osc.type = 'sine';
-      gain.gain.value = 0.15;
-      osc.start();
-      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4);
-      osc.stop(ctx.currentTime + 0.4);
+    const playChime = (): Promise<void> => {
+      return new Promise((resolve) => {
+        try {
+          const ctx = new AudioContext();
+          ctx.resume().then(() => {
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            osc.frequency.value = 880;
+            osc.type = 'sine';
+            gain.gain.value = 0.15;
+            osc.start();
+            gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4);
+            osc.stop(ctx.currentTime + 0.4);
+            setTimeout(() => { ctx.close(); resolve(); }, 500);
+          });
+        } catch {
+          resolve();
+        }
+      });
+    };
 
-      setTimeout(() => {
-        const utterance = new SpeechSynthesisUtterance(text);
-        utterance.lang = 'en-US';
-        utterance.rate = 0.9;
-        utterance.pitch = 1;
-        utterance.volume = 1;
-
-        // Prefer a Google voice if available
-        const voices = this._synth!.getVoices();
-        const googleVoice = voices.find(v => v.name.includes('Google') && v.lang.startsWith('en'));
-        if (googleVoice) utterance.voice = googleVoice;
-
-        this._synth!.speak(utterance);
-        ctx.close();
-      }, 500);
-    } catch {
+    playChime().then(() => {
       const utterance = new SpeechSynthesisUtterance(text);
       utterance.lang = 'en-US';
       utterance.rate = 0.9;
-      this._synth.speak(utterance);
-    }
+      utterance.pitch = 1;
+      utterance.volume = 1;
+
+      // Prefer a Google voice if available
+      const voices = this._synth!.getVoices();
+      const googleVoice = voices.find(v => v.name.includes('Google') && v.lang.startsWith('en'));
+      if (googleVoice) utterance.voice = googleVoice;
+
+      this._synth!.speak(utterance);
+    });
   }
 }
