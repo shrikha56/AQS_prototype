@@ -118,9 +118,16 @@ export class QueueService {
     const waiting = this.queue().filter(q => q.status === 'waiting');
     if (waiting.length === 0) return null;
     const next = waiting[0];
-    this.queue.update(q => q.map(item =>
-      item.ticket === next.ticket ? { ...item, status: 'serving' as const, counter: counterId } : item
-    ));
+    // Mark previous serving ticket at this counter as completed
+    this.queue.update(q => q.map(item => {
+      if (item.counter === counterId && item.status === 'serving') {
+        return { ...item, status: 'completed' as const };
+      }
+      if (item.ticket === next.ticket) {
+        return { ...item, status: 'serving' as const, counter: counterId };
+      }
+      return item;
+    }));
     this.counters.update(c => c.map(counter =>
       counter.id === counterId ? { ...counter, currentTicket: next.ticket } : counter
     ));

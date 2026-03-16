@@ -243,6 +243,10 @@ export class QueueComponent implements OnInit, OnDestroy {
   private _audioUnlocked = false;
 
   constructor() {
+    // Set initial ticket so we don't announce on page load
+    const initialServing = this.queueService.queue().find(q => q.status === 'serving');
+    if (initialServing) this._lastAnnouncedTicket = initialServing.ticket;
+
     // Watch for changes in the currently serving ticket and announce
     effect(() => {
       const serving = this.queueService.queue().find(q => q.status === 'serving');
@@ -251,6 +255,7 @@ export class QueueComponent implements OnInit, OnDestroy {
       const counter = serving.counter ?? 0;
       if (ticket && ticket !== this._lastAnnouncedTicket && ticket !== '---') {
         this._lastAnnouncedTicket = ticket;
+        console.log('[AQS] New serving ticket:', ticket, 'counter:', counter, 'sound:', this.soundEnabled());
         if (this.soundEnabled()) {
           this._announce(ticket, counter);
         }
@@ -259,9 +264,6 @@ export class QueueComponent implements OnInit, OnDestroy {
   }
 
   ngOnInit(): void {
-    // Set initial ticket so we don't announce on page load
-    const serving = this.queueService.queue().find(q => q.status === 'serving');
-    if (serving) this._lastAnnouncedTicket = serving.ticket;
 
     this.updateClock();
     this._clockInterval = setInterval(() => this.updateClock(), 1000);
@@ -338,49 +340,32 @@ export class QueueComponent implements OnInit, OnDestroy {
   }
 
   private _announce(ticket: string, counter: number): void {
-    if (!this._synth) return;
+    if (!this._synth) {
+      console.warn('[AQS] SpeechSynthesis not available');
+      return;
+    }
     this._synth.cancel();
 
     const spellTicket = ticket.split('').join(' ');
     const text = `Now serving, ${spellTicket}, at counter ${counter}.`;
+    console.log('[AQS] Speaking:', text);
 
-    // Play a brief chime tone before speaking
-    const playChime = (): Promise<void> => {
-      return new Promise((resolve) => {
-        try {
-          const ctx = new AudioContext();
-          ctx.resume().then(() => {
-            const osc = ctx.createOscillator();
-            const gain = ctx.createGain();
-            osc.connect(gain);
-            gain.connect(ctx.destination);
-            osc.frequency.value = 880;
-            osc.type = 'sine';
-            gain.gain.value = 0.15;
-            osc.start();
-            gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4);
-            osc.stop(ctx.currentTime + 0.4);
-            setTimeout(() => { ctx.close(); resolve(); }, 500);
-          });
-        } catch {
-          resolve();
-        }
-      });
-    };
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = 'en-US';
+    utterance.rate = 0.9;
+    utterance.pitch = 1;
+    utterance.volume = 1;
 
-    playChime().then(() => {
-      const utterance = new SpeechSynthesisUtterance(text);
-      utterance.lang = 'en-US';
-      utterance.rate = 0.9;
-      utterance.pitch = 1;
-      utterance.volume = 1;
+    utterance.onerror = (e) => console.error('[AQS] Speech error:', e);
+    utterance.onstart = () => console.log('[AQS] Speech started');
+    utterance.onend = () => console.log('[AQS] Speech ended');
 
-      // Prefer a Google voice if available
-      const voices = this._synth!.getVoices();
-      const googleVoice = voices.find(v => v.name.includes('Google') && v.lang.startsWith('en'));
-      if (googleVoice) utterance.voice = googleVoice;
+    // Prefer a natural voice if available
+    const voices = this._synth.getVoices();
+    const preferredVoice = voices.find(v => v.name.includes('Google') && v.lang.startsWith('en'))
+      || voices.find(v => v.lang.startsWith('en'));
+    if (preferredVoice) utterance.voice = preferredVoice;
 
-      this._synth!.speak(utterance);
-    });
+    this._synth.speak(utterance);
   }
 }
