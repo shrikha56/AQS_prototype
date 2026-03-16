@@ -1,0 +1,1568 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AQS — Appointment & Queuing System | PlaceOS</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Space+Mono:wght@400;700&family=DM+Serif+Display&display=swap" rel="stylesheet">
+<style>
+:root {
+  --primary: #4F46E5;
+  --primary-dark: #4338CA;
+  --primary-light: #818CF8;
+  --primary-wash: #EEF2FF;
+  --accent: #06B6D4;
+  --accent-dark: #0891B2;
+  --success: #10B981;
+  --success-wash: #D1FAE5;
+  --warning: #F59E0B;
+  --warning-wash: #FEF3C7;
+  --error: #EF4444;
+  --error-wash: #FEE2E2;
+  --bg: #F1F5F9;
+  --surface: #FFFFFF;
+  --surface-alt: #F8FAFC;
+  --border: #E2E8F0;
+  --text: #0F172A;
+  --text-secondary: #64748B;
+  --text-muted: #94A3B8;
+  --shadow-sm: 0 1px 2px rgba(15,23,42,0.05);
+  --shadow: 0 1px 3px rgba(15,23,42,0.08), 0 1px 2px rgba(15,23,42,0.06);
+  --shadow-md: 0 4px 6px -1px rgba(15,23,42,0.08), 0 2px 4px -2px rgba(15,23,42,0.06);
+  --shadow-lg: 0 10px 15px -3px rgba(15,23,42,0.08), 0 4px 6px -4px rgba(15,23,42,0.06);
+  --radius: 12px;
+  --radius-sm: 8px;
+  --radius-lg: 16px;
+  --font: 'Plus Jakarta Sans', system-ui, sans-serif;
+  --font-mono: 'Space Mono', monospace;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+  font-family: var(--font);
+  background: var(--bg);
+  color: var(--text);
+  overflow: hidden;
+}
+
+/* ─── LAYOUT ─── */
+.app { display: flex; height: 100vh; }
+
+.sidebar {
+  width: 72px;
+  background: var(--primary-dark);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 16px 0;
+  gap: 4px;
+  z-index: 100;
+  flex-shrink: 0;
+}
+.sidebar-logo {
+  width: 40px; height: 40px;
+  background: white;
+  border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  margin-bottom: 20px;
+  font-weight: 800; font-size: 14px; color: var(--primary-dark);
+  letter-spacing: -0.5px;
+}
+.sidebar-nav { display: flex; flex-direction: column; gap: 4px; width: 100%; padding: 0 8px; }
+.nav-btn {
+  width: 56px; height: 56px;
+  border: none; background: transparent;
+  border-radius: var(--radius-sm);
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 3px; cursor: pointer;
+  color: rgba(255,255,255,0.55);
+  transition: all 0.2s;
+  font-family: var(--font);
+  font-size: 9px; font-weight: 600;
+  letter-spacing: 0.3px;
+}
+.nav-btn:hover { background: rgba(255,255,255,0.1); color: rgba(255,255,255,0.85); }
+.nav-btn.active { background: rgba(255,255,255,0.15); color: #fff; }
+.nav-btn svg { width: 22px; height: 22px; flex-shrink: 0; }
+
+.main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+.topbar {
+  height: 56px; background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 24px; flex-shrink: 0;
+}
+.topbar-title { font-size: 15px; font-weight: 700; color: var(--text); display: flex; align-items: center; gap: 10px; }
+.topbar-title .tag {
+  font-size: 10px; font-weight: 700; letter-spacing: 0.5px;
+  background: var(--primary-wash); color: var(--primary);
+  padding: 3px 8px; border-radius: 4px; text-transform: uppercase;
+}
+.topbar-right { display: flex; align-items: center; gap: 12px; }
+.topbar-status {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 12px; font-weight: 500; color: var(--success);
+}
+.topbar-status::before {
+  content: ''; width: 7px; height: 7px; border-radius: 50%;
+  background: var(--success);
+  animation: pulse-dot 2s infinite;
+}
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+.topbar-btn {
+  padding: 6px 14px; border-radius: var(--radius-sm);
+  font-family: var(--font); font-size: 12px; font-weight: 600;
+  border: 1px solid var(--border); background: var(--surface);
+  color: var(--text); cursor: pointer; transition: all 0.15s;
+}
+.topbar-btn:hover { border-color: var(--primary); color: var(--primary); }
+
+.content { flex: 1; overflow-y: auto; padding: 24px; }
+
+/* ─── PAGES ─── */
+.page { display: none; height: 100%; }
+.page.active { display: block; }
+
+/* ─── BOOKING PORTAL ─── */
+.booking-container {
+  max-width: 640px; margin: 0 auto;
+}
+.booking-header {
+  text-align: center; margin-bottom: 32px;
+}
+.booking-header h1 {
+  font-family: 'DM Serif Display', serif;
+  font-size: 28px; font-weight: 400; color: var(--text);
+  margin-bottom: 6px;
+}
+.booking-header p { font-size: 14px; color: var(--text-secondary); }
+
+.step-indicator {
+  display: flex; align-items: center; justify-content: center;
+  gap: 0; margin-bottom: 32px;
+}
+.step-dot {
+  width: 32px; height: 32px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 13px; font-weight: 700;
+  background: var(--border); color: var(--text-muted);
+  transition: all 0.3s;
+}
+.step-dot.active { background: var(--primary); color: #fff; }
+.step-dot.done { background: var(--success); color: #fff; }
+.step-line { width: 48px; height: 2px; background: var(--border); transition: background 0.3s; }
+.step-line.done { background: var(--success); }
+
+.step-content { display: none; animation: fadeUp 0.35s ease; }
+.step-content.active { display: block; }
+@keyframes fadeUp { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
+
+.card {
+  background: var(--surface); border-radius: var(--radius);
+  border: 1px solid var(--border); padding: 24px;
+  box-shadow: var(--shadow-sm);
+}
+
+.location-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.location-card {
+  padding: 16px; border-radius: var(--radius-sm);
+  border: 2px solid var(--border); background: var(--surface);
+  cursor: pointer; transition: all 0.2s; text-align: left;
+  font-family: var(--font);
+}
+.location-card:hover { border-color: var(--primary-light); background: var(--primary-wash); }
+.location-card.selected { border-color: var(--primary); background: var(--primary-wash); }
+.location-card .name { font-size: 13px; font-weight: 700; color: var(--text); margin-bottom: 2px; }
+.location-card .addr { font-size: 11px; color: var(--text-secondary); }
+
+.service-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.service-card {
+  padding: 14px 16px; border-radius: var(--radius-sm);
+  border: 2px solid var(--border); background: var(--surface);
+  cursor: pointer; transition: all 0.2s; text-align: left;
+  font-family: var(--font);
+}
+.service-card:hover { border-color: var(--primary-light); }
+.service-card.selected { border-color: var(--primary); background: var(--primary-wash); }
+.service-card .svc-icon { font-size: 20px; margin-bottom: 6px; }
+.service-card .svc-name { font-size: 13px; font-weight: 600; color: var(--text); }
+.service-card .svc-time { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+
+.date-picker {
+  display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px;
+  margin-bottom: 16px;
+}
+.date-header { font-size: 11px; font-weight: 700; color: var(--text-muted); text-align: center; text-transform: uppercase; letter-spacing: 0.5px; }
+.date-cell {
+  aspect-ratio: 1; border-radius: var(--radius-sm);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 13px; font-weight: 500; border: none;
+  background: transparent; cursor: pointer; transition: all 0.15s;
+  font-family: var(--font); color: var(--text);
+}
+.date-cell:hover { background: var(--primary-wash); }
+.date-cell.selected { background: var(--primary); color: #fff; }
+.date-cell.today { font-weight: 800; }
+.date-cell.disabled { color: var(--text-muted); pointer-events: none; }
+
+.time-slots { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.time-slot {
+  padding: 10px; text-align: center; border-radius: var(--radius-sm);
+  border: 1px solid var(--border); font-size: 13px; font-weight: 600;
+  cursor: pointer; transition: all 0.15s; font-family: var(--font);
+  background: var(--surface); color: var(--text);
+}
+.time-slot:hover { border-color: var(--primary); background: var(--primary-wash); }
+.time-slot.selected { background: var(--primary); color: #fff; border-color: var(--primary); }
+.time-slot.unavailable { opacity: 0.35; pointer-events: none; text-decoration: line-through; }
+
+.form-group { margin-bottom: 16px; }
+.form-label { display: block; font-size: 12px; font-weight: 700; color: var(--text-secondary); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px; }
+.form-input {
+  width: 100%; padding: 10px 14px; border-radius: var(--radius-sm);
+  border: 1px solid var(--border); font-family: var(--font);
+  font-size: 14px; color: var(--text); transition: border-color 0.15s;
+  outline: none; background: var(--surface);
+}
+.form-input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(79,70,229,0.1); }
+
+.btn {
+  padding: 12px 24px; border-radius: var(--radius-sm);
+  font-family: var(--font); font-size: 14px; font-weight: 700;
+  border: none; cursor: pointer; transition: all 0.2s;
+  display: inline-flex; align-items: center; gap: 8px;
+}
+.btn-primary { background: var(--primary); color: #fff; }
+.btn-primary:hover { background: var(--primary-dark); transform: translateY(-1px); box-shadow: var(--shadow-md); }
+.btn-outline { background: transparent; border: 1px solid var(--border); color: var(--text); }
+.btn-outline:hover { border-color: var(--primary); color: var(--primary); }
+.btn-block { width: 100%; justify-content: center; }
+.btn-lg { padding: 16px 32px; font-size: 16px; border-radius: var(--radius); }
+.btn-success { background: var(--success); color: #fff; }
+.btn-success:hover { background: #059669; }
+.btn-error { background: var(--error); color: #fff; }
+.btn-error:hover { background: #DC2626; }
+.btn-warning { background: var(--warning); color: #fff; }
+.btn-warning:hover { background: #D97706; }
+.btn-ghost { background: transparent; color: var(--text-secondary); }
+.btn-ghost:hover { color: var(--primary); background: var(--primary-wash); }
+.btn-sm { padding: 6px 12px; font-size: 12px; }
+.btn-group { display: flex; gap: 10px; margin-top: 20px; }
+
+/* Confirmation */
+.confirmation-card {
+  text-align: center; padding: 40px;
+}
+.confirmation-icon {
+  width: 64px; height: 64px; border-radius: 50%;
+  background: var(--success-wash); color: var(--success);
+  display: flex; align-items: center; justify-content: center;
+  margin: 0 auto 20px; font-size: 28px;
+}
+.confirmation-ref {
+  font-family: var(--font-mono); font-size: 24px; font-weight: 700;
+  color: var(--primary); letter-spacing: 2px; margin: 12px 0;
+}
+.qr-placeholder {
+  width: 140px; height: 140px; margin: 20px auto;
+  background: var(--text);
+  border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  position: relative; overflow: hidden;
+}
+.qr-placeholder canvas { image-rendering: pixelated; }
+.jedi-ref {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: var(--warning-wash); color: #92400E;
+  padding: 6px 14px; border-radius: 6px;
+  font-size: 12px; font-weight: 600; margin-top: 12px;
+}
+
+/* ─── KIOSK ─── */
+.kiosk-page { background: #0F172A; color: #fff; overflow: hidden; }
+.kiosk-page .content { padding: 0; display: flex; flex-direction: column; }
+
+.kiosk-idle {
+  flex: 1; display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  background: linear-gradient(135deg, #1E1B4B 0%, #312E81 40%, #4338CA 100%);
+  position: relative; overflow: hidden;
+}
+.kiosk-idle::before {
+  content: ''; position: absolute; inset: 0;
+  background: radial-gradient(circle at 30% 70%, rgba(6,182,212,0.15) 0%, transparent 50%),
+              radial-gradient(circle at 70% 30%, rgba(129,140,248,0.1) 0%, transparent 50%);
+}
+.kiosk-idle .kiosk-logo {
+  font-size: 48px; font-weight: 800; color: #fff;
+  letter-spacing: -2px; margin-bottom: 8px; position: relative;
+}
+.kiosk-idle .kiosk-sub {
+  font-size: 16px; color: rgba(255,255,255,0.6);
+  margin-bottom: 48px; position: relative;
+}
+.kiosk-touch-prompt {
+  font-size: 20px; font-weight: 600; color: rgba(255,255,255,0.5);
+  animation: breathe 3s ease-in-out infinite; position: relative;
+}
+@keyframes breathe { 0%, 100% { opacity: 0.4; } 50% { opacity: 1; } }
+
+.kiosk-container {
+  flex: 1; display: none; flex-direction: column;
+  background: linear-gradient(180deg, #1E1B4B 0%, #0F172A 100%);
+}
+.kiosk-container.active { display: flex; }
+.kiosk-header {
+  padding: 24px 32px; display: flex; align-items: center; justify-content: space-between;
+}
+.kiosk-header h2 { font-size: 22px; font-weight: 700; }
+.kiosk-body { flex: 1; padding: 0 32px 32px; display: flex; flex-direction: column; gap: 16px; }
+
+.kiosk-option {
+  padding: 24px 28px; border-radius: var(--radius);
+  background: rgba(255,255,255,0.06); border: 2px solid rgba(255,255,255,0.1);
+  cursor: pointer; transition: all 0.2s; display: flex; align-items: center; gap: 20px;
+  font-family: var(--font);
+  color: #fff;
+}
+.kiosk-option:hover { background: rgba(255,255,255,0.1); border-color: var(--accent); }
+.kiosk-option .ko-icon {
+  width: 56px; height: 56px; border-radius: 14px;
+  background: rgba(79,70,229,0.3); display: flex; align-items: center; justify-content: center;
+  font-size: 24px; flex-shrink: 0;
+}
+.kiosk-option .ko-text h3 { font-size: 18px; font-weight: 700; margin-bottom: 4px; }
+.kiosk-option .ko-text p { font-size: 14px; color: rgba(255,255,255,0.5); }
+
+.kiosk-input-group {
+  display: flex; flex-direction: column; gap: 12px;
+}
+.kiosk-input {
+  width: 100%; padding: 18px 20px; border-radius: var(--radius);
+  background: rgba(255,255,255,0.08); border: 2px solid rgba(255,255,255,0.12);
+  font-family: var(--font); font-size: 20px; color: #fff;
+  outline: none; transition: border-color 0.2s;
+}
+.kiosk-input::placeholder { color: rgba(255,255,255,0.3); }
+.kiosk-input:focus { border-color: var(--accent); }
+
+.kiosk-numpad {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;
+  max-width: 320px; margin: 0 auto;
+}
+.numpad-key {
+  padding: 18px; border-radius: var(--radius-sm);
+  background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.1);
+  font-size: 24px; font-weight: 700; color: #fff;
+  cursor: pointer; transition: all 0.15s; font-family: var(--font);
+}
+.numpad-key:hover { background: rgba(255,255,255,0.15); }
+.numpad-key.action { background: var(--primary); border-color: var(--primary); }
+
+.kiosk-confirm-card {
+  flex: 1; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; text-align: center;
+}
+.kiosk-ticket {
+  font-family: var(--font-mono); font-size: 72px; font-weight: 700;
+  color: var(--accent); letter-spacing: 4px;
+  text-shadow: 0 0 40px rgba(6,182,212,0.4);
+  margin: 16px 0;
+}
+.kiosk-wait {
+  font-size: 18px; color: rgba(255,255,255,0.6);
+  margin-bottom: 24px;
+}
+.kiosk-wait strong { color: #fff; font-size: 28px; display: block; margin-top: 4px; }
+
+/* ─── QUEUE DISPLAY ─── */
+.queue-page { background: #020617; color: #fff; }
+.queue-page .content { padding: 0; display: flex; flex-direction: column; height: 100%; }
+
+.queue-display {
+  flex: 1; display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr auto;
+  gap: 0; height: 100%;
+}
+.queue-now-serving {
+  background: linear-gradient(135deg, #312E81, #4338CA);
+  padding: 40px; display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  position: relative; overflow: hidden;
+}
+.queue-now-serving::after {
+  content: ''; position: absolute; inset: 0;
+  background: radial-gradient(circle at 50% 50%, rgba(255,255,255,0.05) 0%, transparent 70%);
+}
+.queue-now-label {
+  font-size: 16px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 4px; color: rgba(255,255,255,0.5);
+  margin-bottom: 16px; position: relative;
+}
+.queue-now-ticket {
+  font-family: var(--font-mono); font-size: 96px; font-weight: 700;
+  color: #fff; letter-spacing: 6px; line-height: 1;
+  position: relative;
+  text-shadow: 0 0 60px rgba(255,255,255,0.3);
+}
+.queue-now-counter {
+  font-size: 20px; font-weight: 600; color: var(--accent);
+  margin-top: 16px; position: relative;
+}
+.queue-now-counter span {
+  font-size: 36px; font-weight: 800;
+}
+
+.queue-next-up {
+  background: #0F172A; padding: 32px;
+  display: flex; flex-direction: column;
+}
+.queue-next-label {
+  font-size: 13px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 3px; color: var(--text-muted); margin-bottom: 16px;
+}
+.queue-list { flex: 1; display: flex; flex-direction: column; gap: 8px; overflow-y: auto; }
+.queue-item {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 18px; border-radius: var(--radius-sm);
+  background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.06);
+  transition: all 0.3s;
+}
+.queue-item.next {
+  background: rgba(6,182,212,0.1); border-color: var(--accent);
+  animation: glowPulse 2s ease-in-out infinite;
+}
+@keyframes glowPulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(6,182,212,0); }
+  50% { box-shadow: 0 0 20px 2px rgba(6,182,212,0.15); }
+}
+.queue-item .qi-ticket { font-family: var(--font-mono); font-size: 18px; font-weight: 700; }
+.queue-item .qi-service { font-size: 12px; color: var(--text-muted); }
+.queue-item .qi-wait { font-size: 13px; color: var(--accent); font-weight: 600; }
+
+.queue-footer {
+  grid-column: 1 / -1;
+  background: #0F172A; border-top: 1px solid rgba(255,255,255,0.06);
+  padding: 16px 32px;
+  display: flex; align-items: center; justify-content: space-between;
+}
+.queue-stats { display: flex; gap: 32px; }
+.queue-stat { text-align: center; }
+.queue-stat .qs-val { font-size: 22px; font-weight: 800; color: var(--accent); font-family: var(--font-mono); }
+.queue-stat .qs-label { font-size: 10px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px; margin-top: 2px; }
+.queue-message {
+  font-size: 13px; color: rgba(255,255,255,0.4);
+  max-width: 400px; text-align: right;
+}
+.queue-time { font-family: var(--font-mono); font-size: 18px; color: rgba(255,255,255,0.6); }
+
+/* ─── COUNTER STAFF ─── */
+.staff-grid {
+  display: grid; grid-template-columns: 320px 1fr;
+  gap: 20px; height: calc(100vh - 104px);
+}
+.staff-queue-panel {
+  background: var(--surface); border-radius: var(--radius);
+  border: 1px solid var(--border); display: flex; flex-direction: column;
+  overflow: hidden;
+}
+.staff-queue-header {
+  padding: 16px 20px; border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: space-between;
+}
+.staff-queue-header h3 { font-size: 14px; font-weight: 700; }
+.badge {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 22px; height: 22px; padding: 0 6px;
+  border-radius: 11px; font-size: 11px; font-weight: 700;
+}
+.badge-primary { background: var(--primary-wash); color: var(--primary); }
+.badge-success { background: var(--success-wash); color: #065F46; }
+.badge-warning { background: var(--warning-wash); color: #92400E; }
+.badge-error { background: var(--error-wash); color: #991B1B; }
+
+.staff-queue-list { flex: 1; overflow-y: auto; padding: 8px; }
+.staff-queue-item {
+  padding: 12px 14px; border-radius: var(--radius-sm);
+  cursor: pointer; transition: all 0.15s; margin-bottom: 4px;
+  border: 1px solid transparent;
+}
+.staff-queue-item:hover { background: var(--primary-wash); }
+.staff-queue-item.active { border-color: var(--primary); background: var(--primary-wash); }
+.staff-queue-item .sqi-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; }
+.staff-queue-item .sqi-ticket { font-family: var(--font-mono); font-size: 14px; font-weight: 700; color: var(--primary); }
+.staff-queue-item .sqi-name { font-size: 13px; font-weight: 600; }
+.staff-queue-item .sqi-service { font-size: 11px; color: var(--text-muted); }
+.staff-queue-item .sqi-time { font-size: 11px; color: var(--text-secondary); }
+
+.staff-main { display: flex; flex-direction: column; gap: 16px; }
+
+.staff-current-card {
+  background: var(--surface); border-radius: var(--radius);
+  border: 1px solid var(--border); padding: 24px;
+  display: flex; align-items: flex-start; gap: 24px;
+}
+.staff-call-section { flex: 1; }
+.staff-call-section h2 { font-size: 14px; font-weight: 700; color: var(--text-secondary); margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px; }
+.staff-customer-name { font-size: 24px; font-weight: 800; color: var(--text); margin-bottom: 4px; }
+.staff-customer-service { font-size: 14px; color: var(--text-secondary); margin-bottom: 4px; }
+.staff-customer-ref { font-family: var(--font-mono); font-size: 13px; color: var(--primary); font-weight: 600; }
+.staff-customer-jedi { font-family: var(--font-mono); font-size: 12px; color: #92400E; background: var(--warning-wash); padding: 3px 8px; border-radius: 4px; display: inline-block; margin-top: 4px; }
+
+.call-next-btn {
+  padding: 20px 40px; border-radius: var(--radius);
+  background: var(--primary); color: #fff; border: none;
+  font-family: var(--font); font-size: 18px; font-weight: 800;
+  cursor: pointer; transition: all 0.2s;
+  display: flex; align-items: center; gap: 12px;
+  white-space: nowrap; flex-shrink: 0;
+}
+.call-next-btn:hover { background: var(--primary-dark); transform: translateY(-2px); box-shadow: 0 8px 24px rgba(79,70,229,0.3); }
+.call-next-btn svg { width: 24px; height: 24px; }
+
+.staff-actions {
+  background: var(--surface); border-radius: var(--radius);
+  border: 1px solid var(--border); padding: 16px;
+  display: flex; gap: 10px; flex-wrap: wrap;
+}
+
+.staff-stats-row {
+  display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px;
+}
+.stat-card {
+  background: var(--surface); border-radius: var(--radius);
+  border: 1px solid var(--border); padding: 16px 20px;
+}
+.stat-card .stat-val { font-size: 28px; font-weight: 800; color: var(--text); font-family: var(--font-mono); }
+.stat-card .stat-label { font-size: 11px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; margin-top: 2px; }
+
+.staff-status-bar {
+  background: var(--surface); border-radius: var(--radius);
+  border: 1px solid var(--border); padding: 12px 20px;
+  display: flex; align-items: center; justify-content: space-between;
+}
+.staff-status-info { display: flex; align-items: center; gap: 16px; font-size: 13px; }
+.staff-status-dot { width: 8px; height: 8px; border-radius: 50%; }
+.staff-status-dot.active { background: var(--success); }
+.staff-status-dot.paused { background: var(--warning); }
+
+/* ─── ADMIN ─── */
+.admin-grid {
+  display: grid; grid-template-columns: 1fr 1fr 1fr;
+  gap: 16px;
+}
+.admin-full { grid-column: 1 / -1; }
+.admin-half { grid-column: span 1; }
+.admin-two-thirds { grid-column: span 2; }
+
+.admin-card {
+  background: var(--surface); border-radius: var(--radius);
+  border: 1px solid var(--border); overflow: hidden;
+}
+.admin-card-header {
+  padding: 16px 20px; border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: space-between;
+}
+.admin-card-header h3 { font-size: 14px; font-weight: 700; }
+.admin-card-body { padding: 20px; }
+
+.admin-stats-row {
+  display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px;
+  grid-column: 1 / -1;
+}
+.admin-stat {
+  background: var(--surface); border-radius: var(--radius);
+  border: 1px solid var(--border); padding: 20px;
+}
+.admin-stat .as-label { font-size: 11px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
+.admin-stat .as-val { font-size: 32px; font-weight: 800; margin-top: 4px; font-family: var(--font-mono); }
+.admin-stat .as-change { font-size: 11px; font-weight: 600; margin-top: 4px; }
+.admin-stat .as-change.up { color: var(--success); }
+.admin-stat .as-change.down { color: var(--error); }
+
+.counter-status-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+.counter-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 12px; border-radius: var(--radius-sm);
+  background: var(--surface-alt); border: 1px solid var(--border);
+}
+.counter-row .cr-num {
+  width: 28px; height: 28px; border-radius: 6px;
+  background: var(--primary-wash); color: var(--primary);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12px; font-weight: 800;
+}
+.counter-row .cr-agent { font-size: 12px; font-weight: 600; flex: 1; }
+.counter-row .cr-status { font-size: 10px; font-weight: 700; padding: 3px 8px; border-radius: 4px; text-transform: uppercase; letter-spacing: 0.5px; }
+.counter-row .cr-status.active { background: var(--success-wash); color: #065F46; }
+.counter-row .cr-status.paused { background: var(--warning-wash); color: #92400E; }
+.counter-row .cr-status.closed { background: var(--surface-alt); color: var(--text-muted); border: 1px solid var(--border); }
+
+.chart-container { position: relative; height: 200px; }
+canvas { width: 100% !important; height: 100% !important; }
+
+.service-config-table { width: 100%; border-collapse: collapse; }
+.service-config-table th {
+  text-align: left; padding: 8px 12px;
+  font-size: 10px; font-weight: 700; color: var(--text-muted);
+  text-transform: uppercase; letter-spacing: 0.5px;
+  border-bottom: 1px solid var(--border);
+}
+.service-config-table td {
+  padding: 10px 12px; font-size: 13px;
+  border-bottom: 1px solid var(--border);
+}
+.service-config-table tr:last-child td { border-bottom: none; }
+
+.csat-bar-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.csat-bar-label { font-size: 12px; font-weight: 600; width: 100px; }
+.csat-bar-track { flex: 1; height: 8px; background: var(--border); border-radius: 4px; overflow: hidden; }
+.csat-bar-fill { height: 100%; border-radius: 4px; transition: width 1s ease; }
+.csat-bar-val { font-size: 13px; font-weight: 700; width: 40px; text-align: right; font-family: var(--font-mono); }
+
+.location-open-tag {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 3px 10px; border-radius: 4px; font-size: 10px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.5px;
+}
+.location-open-tag.open { background: var(--success-wash); color: #065F46; }
+.location-open-tag.closed { background: var(--surface-alt); color: var(--text-muted); }
+
+/* ─── SCROLLBAR ─── */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+
+/* Section labels */
+.section-label {
+  font-size: 11px; font-weight: 700; color: var(--text-muted);
+  text-transform: uppercase; letter-spacing: 1px; margin-bottom: 12px;
+}
+
+/* Walk-in banner */
+.walkin-banner {
+  background: linear-gradient(135deg, var(--accent-dark), var(--accent));
+  border-radius: var(--radius); padding: 20px 24px;
+  color: #fff; display: flex; align-items: center; justify-content: space-between;
+  margin-top: 16px;
+}
+.walkin-banner h3 { font-size: 16px; font-weight: 700; margin-bottom: 4px; }
+.walkin-banner p { font-size: 13px; opacity: 0.8; }
+.walkin-btn {
+  padding: 10px 20px; border-radius: var(--radius-sm);
+  background: rgba(255,255,255,0.2); color: #fff; border: 1px solid rgba(255,255,255,0.3);
+  font-family: var(--font); font-size: 13px; font-weight: 700;
+  cursor: pointer; transition: all 0.2s; white-space: nowrap;
+}
+.walkin-btn:hover { background: rgba(255,255,255,0.3); }
+
+/* Location status indicator */
+.location-status-indicator {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 16px; border-radius: var(--radius-sm);
+  background: var(--success-wash); font-size: 12px; font-weight: 600;
+  color: #065F46;
+}
+.location-status-indicator.closed { background: var(--surface-alt); color: var(--text-muted); }
+</style>
+</head>
+<body>
+<div class="app">
+  <!-- Sidebar -->
+  <div class="sidebar">
+    <div class="sidebar-logo">AQS</div>
+    <nav class="sidebar-nav">
+      <button class="nav-btn active" onclick="showPage('booking')" title="Booking Portal">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+        BOOK
+      </button>
+      <button class="nav-btn" onclick="showPage('kiosk')" title="Check-In Kiosk">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+        KIOSK
+      </button>
+      <button class="nav-btn" onclick="showPage('queue')" title="Queue Display">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        QUEUE
+      </button>
+      <button class="nav-btn" onclick="showPage('staff')" title="Counter Staff">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+        STAFF
+      </button>
+      <button class="nav-btn" onclick="showPage('admin')" title="Admin Console">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        ADMIN
+      </button>
+    </nav>
+  </div>
+
+  <div class="main">
+    <!-- Topbar -->
+    <div class="topbar">
+      <div class="topbar-title" id="topbar-title">
+        Customer Booking Portal
+        <span class="tag">LA County RR/CC</span>
+      </div>
+      <div class="topbar-right">
+        <div class="topbar-status">System Online</div>
+        <div class="location-status-indicator" id="location-status">
+          <span>&#9679;</span> Norwalk HQ — Open
+        </div>
+      </div>
+    </div>
+
+    <div class="content">
+      <!-- PAGE 1: BOOKING PORTAL -->
+      <div class="page active" id="page-booking">
+        <div class="booking-container">
+          <div class="booking-header">
+            <h1>Book an Appointment</h1>
+            <p>Los Angeles County Registrar-Recorder/County Clerk</p>
+          </div>
+
+          <div class="step-indicator">
+            <div class="step-dot active" id="sd-1">1</div>
+            <div class="step-line" id="sl-1"></div>
+            <div class="step-dot" id="sd-2">2</div>
+            <div class="step-line" id="sl-2"></div>
+            <div class="step-dot" id="sd-3">3</div>
+            <div class="step-line" id="sl-3"></div>
+            <div class="step-dot" id="sd-4">4</div>
+            <div class="step-line" id="sl-4"></div>
+            <div class="step-dot" id="sd-5">5</div>
+          </div>
+
+          <!-- Step 1: Location -->
+          <div class="step-content active" id="step-1">
+            <div class="card">
+              <div class="section-label">Select Office Location</div>
+              <div class="location-grid" id="location-grid"></div>
+            </div>
+            <div class="walkin-banner">
+              <div>
+                <h3>Walk-In? No Problem.</h3>
+                <p>Join the virtual queue without an appointment</p>
+              </div>
+              <button class="walkin-btn" onclick="startWalkIn()">Join Queue &rarr;</button>
+            </div>
+          </div>
+
+          <!-- Step 2: Service -->
+          <div class="step-content" id="step-2">
+            <div class="card">
+              <div class="section-label">Select Service Type</div>
+              <div class="service-grid" id="service-grid"></div>
+            </div>
+            <div class="btn-group">
+              <button class="btn btn-outline" onclick="goStep(1)">&larr; Back</button>
+            </div>
+          </div>
+
+          <!-- Step 3: Date & Time -->
+          <div class="step-content" id="step-3">
+            <div class="card" style="margin-bottom:16px;">
+              <div class="section-label">Select Date — March 2026</div>
+              <div class="date-picker" id="date-picker"></div>
+            </div>
+            <div class="card">
+              <div class="section-label">Available Time Slots</div>
+              <div class="time-slots" id="time-slots"></div>
+            </div>
+            <div class="btn-group">
+              <button class="btn btn-outline" onclick="goStep(2)">&larr; Back</button>
+            </div>
+          </div>
+
+          <!-- Step 4: Details -->
+          <div class="step-content" id="step-4">
+            <div class="card">
+              <div class="section-label">Your Details</div>
+              <div class="form-group">
+                <label class="form-label">Full Name</label>
+                <input class="form-input" id="cust-name" type="text" placeholder="Jane Smith" value="Jane Smith">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Phone Number</label>
+                <input class="form-input" id="cust-phone" type="tel" placeholder="(213) 555-0142" value="(213) 555-0142">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Email Address</label>
+                <input class="form-input" id="cust-email" type="email" placeholder="jane.smith@email.com" value="jane.smith@email.com">
+              </div>
+              <button class="btn btn-primary btn-block" onclick="confirmBooking()">Confirm Appointment &rarr;</button>
+            </div>
+            <div class="btn-group">
+              <button class="btn btn-outline" onclick="goStep(3)">&larr; Back</button>
+            </div>
+          </div>
+
+          <!-- Step 5: Confirmation -->
+          <div class="step-content" id="step-5">
+            <div class="card confirmation-card">
+              <div class="confirmation-icon">&#10003;</div>
+              <h2 style="font-size:20px;font-weight:800;">Appointment Confirmed!</h2>
+              <p style="color:var(--text-secondary);font-size:14px;margin-top:4px;" id="confirm-details"></p>
+              <div class="confirmation-ref" id="confirm-ref">AQS-2026-4821</div>
+              <div class="qr-placeholder" id="qr-code"></div>
+              <div class="jedi-ref">
+                <span>&#128279;</span> JEDI Case: <span id="jedi-ref" style="font-family:var(--font-mono);">JD-RC-00482</span>
+              </div>
+              <p style="font-size:13px;color:var(--text-secondary);margin-top:16px;">Confirmation sent via SMS & email</p>
+              <div class="btn-group" style="justify-content:center;">
+                <button class="btn btn-outline" onclick="resetBooking()">Book Another</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- PAGE 2: KIOSK -->
+      <div class="page kiosk-page" id="page-kiosk">
+        <div class="kiosk-idle" id="kiosk-idle" onclick="showKioskMain()">
+          <div class="kiosk-logo">PlaceOS</div>
+          <div class="kiosk-sub">LA County Registrar-Recorder / County Clerk</div>
+          <div class="kiosk-touch-prompt">Tap anywhere to check in</div>
+        </div>
+        <div class="kiosk-container" id="kiosk-main">
+          <div class="kiosk-header">
+            <h2 id="kiosk-title">Check In</h2>
+            <button class="btn btn-ghost" style="color:rgba(255,255,255,0.5);" onclick="resetKiosk()">&#10005; Cancel</button>
+          </div>
+          <div class="kiosk-body" id="kiosk-body">
+            <!-- Filled by JS -->
+          </div>
+        </div>
+      </div>
+
+      <!-- PAGE 3: QUEUE DISPLAY -->
+      <div class="page queue-page" id="page-queue">
+        <div class="queue-display">
+          <div class="queue-now-serving">
+            <div class="queue-now-label">Now Serving</div>
+            <div class="queue-now-ticket" id="q-now-ticket">A-047</div>
+            <div class="queue-now-counter">Counter <span id="q-now-counter">3</span></div>
+          </div>
+          <div class="queue-next-up">
+            <div class="queue-next-label">Up Next</div>
+            <div class="queue-list" id="queue-list"></div>
+          </div>
+          <div class="queue-footer">
+            <div class="queue-stats">
+              <div class="queue-stat"><div class="qs-val" id="q-waiting">12</div><div class="qs-label">Waiting</div></div>
+              <div class="queue-stat"><div class="qs-val" id="q-serving">4</div><div class="qs-label">Being Served</div></div>
+              <div class="queue-stat"><div class="qs-val" id="q-served">38</div><div class="qs-label">Served Today</div></div>
+              <div class="queue-stat"><div class="qs-val" id="q-avg-wait">14m</div><div class="qs-label">Avg Wait</div></div>
+            </div>
+            <div class="queue-message">Please have your documents ready. Bring valid photo ID and any required forms.</div>
+            <div class="queue-time" id="q-clock">10:42 AM</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- PAGE 4: COUNTER STAFF -->
+      <div class="page" id="page-staff">
+        <div class="staff-status-bar" style="margin-bottom:16px;">
+          <div class="staff-status-info">
+            <div class="staff-status-dot active" id="staff-dot"></div>
+            <span><strong>Agent:</strong> Maria Chen</span>
+            <span style="color:var(--text-muted);">|</span>
+            <span><strong>Counter:</strong> 3</span>
+            <span style="color:var(--text-muted);">|</span>
+            <span id="staff-status-text" style="color:var(--success);font-weight:600;">Active</span>
+          </div>
+          <div style="display:flex;gap:8px;">
+            <button class="btn btn-sm btn-warning" onclick="togglePause()" id="pause-btn">&#9208; Pause</button>
+          </div>
+        </div>
+        <div class="staff-grid">
+          <div class="staff-queue-panel">
+            <div class="staff-queue-header">
+              <h3>My Queue</h3>
+              <span class="badge badge-primary" id="staff-queue-count">8</span>
+            </div>
+            <div class="staff-queue-list" id="staff-queue-list"></div>
+          </div>
+          <div class="staff-main">
+            <div class="staff-current-card" id="staff-current-card">
+              <div class="staff-call-section">
+                <h2>Currently Serving</h2>
+                <div class="staff-customer-name" id="sc-name">Robert Johnson</div>
+                <div class="staff-customer-service" id="sc-service">Vital Records — Birth Certificate</div>
+                <div class="staff-customer-ref" id="sc-ref">AQS-2026-4819</div>
+                <div class="staff-customer-jedi" id="sc-jedi">JEDI: JD-RC-00479</div>
+              </div>
+              <button class="call-next-btn" onclick="callNext()">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+                Call Next
+              </button>
+            </div>
+            <div class="staff-actions">
+              <button class="btn btn-sm btn-success" onclick="markComplete()">&#10003; Complete</button>
+              <button class="btn btn-sm btn-error" onclick="markNoShow()">&#10007; No-Show</button>
+              <button class="btn btn-sm btn-outline" onclick="transferCustomer()">&#8644; Transfer</button>
+              <button class="btn btn-sm btn-outline">&#128172; Notes</button>
+            </div>
+            <div class="staff-stats-row">
+              <div class="stat-card"><div class="stat-val" id="st-served">12</div><div class="stat-label">Served</div></div>
+              <div class="stat-card"><div class="stat-val" id="st-waiting">8</div><div class="stat-label">In Queue</div></div>
+              <div class="stat-card"><div class="stat-val" id="st-avg">11m</div><div class="stat-label">Avg Service</div></div>
+              <div class="stat-card"><div class="stat-val" id="st-noshow">2</div><div class="stat-label">No-Shows</div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- PAGE 5: ADMIN -->
+      <div class="page" id="page-admin">
+        <div class="admin-grid">
+          <div class="admin-stats-row">
+            <div class="admin-stat">
+              <div class="as-label">Waiting</div>
+              <div class="as-val" style="color:var(--warning);">12</div>
+              <div class="as-change up">&#9650; 3 from 1hr ago</div>
+            </div>
+            <div class="admin-stat">
+              <div class="as-label">Being Served</div>
+              <div class="as-val" style="color:var(--primary);">4</div>
+              <div class="as-change">4 counters active</div>
+            </div>
+            <div class="admin-stat">
+              <div class="as-label">Completed</div>
+              <div class="as-val" style="color:var(--success);">38</div>
+              <div class="as-change up">&#9650; 12% vs yesterday</div>
+            </div>
+            <div class="admin-stat">
+              <div class="as-label">Avg Wait</div>
+              <div class="as-val">14m</div>
+              <div class="as-change down">&#9660; 2m from yesterday</div>
+            </div>
+            <div class="admin-stat">
+              <div class="as-label">CSAT Score</div>
+              <div class="as-val" style="color:var(--success);">4.3</div>
+              <div class="as-change up">&#9650; 0.2 this week</div>
+            </div>
+          </div>
+
+          <div class="admin-card admin-two-thirds">
+            <div class="admin-card-header">
+              <h3>Peak Hour Analysis — Today</h3>
+              <button class="btn btn-sm btn-outline" onclick="exportCSV()">&#8681; Export CSV</button>
+            </div>
+            <div class="admin-card-body">
+              <div class="chart-container"><canvas id="chart-peak"></canvas></div>
+            </div>
+          </div>
+
+          <div class="admin-card admin-half">
+            <div class="admin-card-header">
+              <h3>Counter Status</h3>
+            </div>
+            <div class="admin-card-body">
+              <div class="counter-status-grid" id="counter-status-grid"></div>
+            </div>
+          </div>
+
+          <div class="admin-card admin-two-thirds">
+            <div class="admin-card-header">
+              <h3>Service Configuration</h3>
+            </div>
+            <div class="admin-card-body" style="padding:0;">
+              <table class="service-config-table" id="service-config-table">
+                <thead><tr><th>Service</th><th>Avg Duration</th><th>Max Daily</th><th>Walk-Ins</th><th>Status</th></tr></thead>
+                <tbody id="service-config-body"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="admin-card admin-half">
+            <div class="admin-card-header">
+              <h3>CSAT by Service</h3>
+            </div>
+            <div class="admin-card-body" id="csat-bars"></div>
+          </div>
+
+          <div class="admin-card admin-full">
+            <div class="admin-card-header">
+              <h3>Queue Depth — Real Time</h3>
+            </div>
+            <div class="admin-card-body">
+              <div class="chart-container"><canvas id="chart-queue"></canvas></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ─── DATA ───
+const LOCATIONS = [
+  { name: 'Norwalk HQ', addr: '12400 Imperial Hwy, Norwalk' },
+  { name: 'Van Nuys', addr: '14340 Sylvan St, Van Nuys' },
+  { name: 'Lancaster', addr: '1028 W Ave J, Lancaster' },
+  { name: 'Pomona', addr: '350 S Garey Ave, Pomona' },
+  { name: 'Inglewood', addr: '3808 W Imperial Hwy, Inglewood' },
+  { name: 'Palmdale', addr: '38557 Sierra Hwy, Palmdale' },
+  { name: 'Beverly Hills', addr: '9355 Burton Way, Beverly Hills' },
+];
+
+const SERVICES = [
+  { name: 'Vital Records', icon: '📋', time: '15 min' },
+  { name: 'Property Documents', icon: '🏠', time: '20 min' },
+  { name: 'Marriage License', icon: '💍', time: '25 min' },
+  { name: 'Birth Certificate', icon: '👶', time: '15 min' },
+  { name: 'Voter Registration', icon: '🗳️', time: '10 min' },
+  { name: 'Business Filing', icon: '💼', time: '30 min' },
+  { name: 'Notary Services', icon: '✍️', time: '20 min' },
+  { name: 'Document Recording', icon: '📄', time: '15 min' },
+];
+
+const TIMES = ['8:00 AM','8:30 AM','9:00 AM','9:30 AM','10:00 AM','10:30 AM','11:00 AM','11:30 AM','1:00 PM','1:30 PM','2:00 PM','2:30 PM','3:00 PM','3:30 PM','4:00 PM','4:30 PM'];
+
+const QUEUE_DATA = [
+  { ticket: 'A-048', name: 'Lisa Park', service: 'Marriage License', wait: '2 min' },
+  { ticket: 'B-023', name: 'Michael Torres', service: 'Property Documents', wait: '5 min' },
+  { ticket: 'A-049', name: 'Priya Sharma', service: 'Vital Records', wait: '8 min' },
+  { ticket: 'C-011', name: 'David Kim', service: 'Business Filing', wait: '12 min' },
+  { ticket: 'A-050', name: 'Sarah Johnson', service: 'Birth Certificate', wait: '15 min' },
+  { ticket: 'B-024', name: 'Carlos Mendez', service: 'Document Recording', wait: '18 min' },
+  { ticket: 'A-051', name: 'Emily Chen', service: 'Voter Registration', wait: '22 min' },
+  { ticket: 'D-005', name: 'James Wilson', service: 'Notary Services', wait: '25 min' },
+];
+
+const COUNTERS = [
+  { num: 1, agent: 'Sarah Kim', status: 'active' },
+  { num: 2, agent: 'Tom Bradley', status: 'active' },
+  { num: 3, agent: 'Maria Chen', status: 'active' },
+  { num: 4, agent: 'Alex Rivera', status: 'paused' },
+  { num: 5, agent: 'James Wu', status: 'active' },
+  { num: 6, agent: '—', status: 'closed' },
+];
+
+let bookingState = { step: 1, location: null, service: null, date: null, time: null };
+let staffPaused = false;
+let staffQueueData = [...QUEUE_DATA];
+
+// ─── PAGE NAV ───
+function showPage(page) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('page-' + page).classList.add('active');
+  event.currentTarget.classList.add('active');
+  const titles = { booking: 'Customer Booking Portal', kiosk: 'Self-Service Check-In Kiosk', queue: 'Queue Display — Signage', staff: 'Counter Staff Dashboard', admin: 'Admin & Reporting Console' };
+  document.getElementById('topbar-title').innerHTML = titles[page] + '<span class="tag">LA County RR/CC</span>';
+}
+
+// ─── BOOKING ───
+function initBooking() {
+  const lg = document.getElementById('location-grid');
+  lg.innerHTML = LOCATIONS.map((l, i) => `<button class="location-card" onclick="selectLocation(${i})"><div class="name">${l.name}</div><div class="addr">${l.addr}</div></button>`).join('');
+  const sg = document.getElementById('service-grid');
+  sg.innerHTML = SERVICES.map((s, i) => `<button class="service-card" onclick="selectService(${i})"><div class="svc-icon">${s.icon}</div><div class="svc-name">${s.name}</div><div class="svc-time">${s.time}</div></button>`).join('');
+  initDatePicker();
+  initTimeSlots();
+}
+
+function selectLocation(i) {
+  bookingState.location = i;
+  document.querySelectorAll('.location-card').forEach((c, idx) => c.classList.toggle('selected', idx === i));
+  setTimeout(() => goStep(2), 300);
+}
+
+function selectService(i) {
+  bookingState.service = i;
+  document.querySelectorAll('.service-card').forEach((c, idx) => c.classList.toggle('selected', idx === i));
+  setTimeout(() => goStep(3), 300);
+}
+
+function initDatePicker() {
+  const dp = document.getElementById('date-picker');
+  const days = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  let html = days.map(d => `<div class="date-header">${d}</div>`).join('');
+  // March 2026 starts on Sunday
+  for (let i = 0; i < 0; i++) html += '<div></div>';
+  for (let d = 1; d <= 31; d++) {
+    const dayOfWeek = new Date(2026, 2, d).getDay();
+    const isPast = d < 16;
+    const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+    const cls = (isPast || isWeekend) ? 'disabled' : '';
+    const today = d === 16 ? ' today' : '';
+    html += `<button class="date-cell ${cls}${today}" onclick="selectDate(${d})">${d}</button>`;
+  }
+  dp.innerHTML = html;
+}
+
+function selectDate(d) {
+  bookingState.date = d;
+  document.querySelectorAll('.date-cell').forEach(c => c.classList.remove('selected'));
+  event.currentTarget.classList.add('selected');
+  // Randomize some unavailable slots
+  document.querySelectorAll('.time-slot').forEach(s => {
+    s.classList.remove('unavailable');
+    if (Math.random() < 0.25) s.classList.add('unavailable');
+  });
+}
+
+function initTimeSlots() {
+  const ts = document.getElementById('time-slots');
+  ts.innerHTML = TIMES.map((t, i) => `<button class="time-slot${Math.random() < 0.15 ? ' unavailable' : ''}" onclick="selectTime(${i})">${t}</button>`).join('');
+}
+
+function selectTime(i) {
+  bookingState.time = i;
+  document.querySelectorAll('.time-slot').forEach((c, idx) => c.classList.toggle('selected', idx === i));
+  setTimeout(() => goStep(4), 300);
+}
+
+function goStep(n) {
+  bookingState.step = n;
+  document.querySelectorAll('.step-content').forEach(s => s.classList.remove('active'));
+  document.getElementById('step-' + n).classList.add('active');
+  for (let i = 1; i <= 5; i++) {
+    const dot = document.getElementById('sd-' + i);
+    dot.classList.remove('active', 'done');
+    if (i < n) dot.classList.add('done');
+    if (i === n) dot.classList.add('active');
+    if (i < 5) {
+      const line = document.getElementById('sl-' + i);
+      line.classList.toggle('done', i < n);
+    }
+  }
+}
+
+function confirmBooking() {
+  const loc = LOCATIONS[bookingState.location || 0];
+  const svc = SERVICES[bookingState.service || 0];
+  const date = `March ${bookingState.date || 17}, 2026`;
+  const time = TIMES[bookingState.time || 4];
+  document.getElementById('confirm-details').textContent = `${svc.name} at ${loc.name} — ${date} at ${time}`;
+  const ref = 'AQS-2026-' + (4800 + Math.floor(Math.random() * 200));
+  document.getElementById('confirm-ref').textContent = ref;
+  document.getElementById('jedi-ref').textContent = 'JD-RC-' + (400 + Math.floor(Math.random() * 100)).toString().padStart(5, '0');
+  generateQR(ref);
+  goStep(5);
+}
+
+function generateQR(text) {
+  const container = document.getElementById('qr-code');
+  const canvas = document.createElement('canvas');
+  const size = 120; canvas.width = size; canvas.height = size;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#0F172A';
+  ctx.fillRect(0, 0, size, size);
+  ctx.fillStyle = '#FFFFFF';
+  // Simulated QR pattern
+  const cellSize = 4;
+  const grid = size / cellSize;
+  for (let x = 0; x < grid; x++) {
+    for (let y = 0; y < grid; y++) {
+      // Corner markers
+      if ((x < 7 && y < 7) || (x >= grid-7 && y < 7) || (x < 7 && y >= grid-7)) {
+        const isEdge = x === 0 || y === 0 || x === 6 || y === 6 || x === grid-1 || y === grid-1 || x === grid-7 || y === grid-7;
+        const isInner = (x >= 2 && x <= 4 && y >= 2 && y <= 4) ||
+                        (x >= grid-5 && x <= grid-3 && y >= 2 && y <= 4) ||
+                        (x >= 2 && x <= 4 && y >= grid-5 && y <= grid-3);
+        if (isEdge || isInner || Math.random() < 0.6) ctx.fillRect(x*cellSize, y*cellSize, cellSize, cellSize);
+      } else if (Math.random() < 0.45) {
+        ctx.fillRect(x*cellSize, y*cellSize, cellSize, cellSize);
+      }
+    }
+  }
+  container.innerHTML = '';
+  container.appendChild(canvas);
+}
+
+function resetBooking() {
+  bookingState = { step: 1, location: null, service: null, date: null, time: null };
+  document.querySelectorAll('.location-card, .service-card, .date-cell, .time-slot').forEach(c => c.classList.remove('selected'));
+  goStep(1);
+}
+
+function startWalkIn() { showPage('kiosk'); document.querySelector('[onclick="showPage(\'kiosk\')"]').classList.add('active'); document.querySelector('[onclick="showPage(\'booking\')"]').classList.remove('active'); }
+
+// ─── KIOSK ───
+function showKioskMain() {
+  document.getElementById('kiosk-idle').style.display = 'none';
+  document.getElementById('kiosk-main').classList.add('active');
+  showKioskMenu();
+}
+
+function showKioskMenu() {
+  document.getElementById('kiosk-title').textContent = 'Check In';
+  document.getElementById('kiosk-body').innerHTML = `
+    <button class="kiosk-option" onclick="showKioskScan()">
+      <div class="ko-icon">📱</div>
+      <div class="ko-text"><h3>Scan QR Code</h3><p>Use your appointment confirmation QR</p></div>
+    </button>
+    <button class="kiosk-option" onclick="showKioskManual()">
+      <div class="ko-icon">🔢</div>
+      <div class="ko-text"><h3>Enter Reference Number</h3><p>Type your booking reference or phone number</p></div>
+    </button>
+    <button class="kiosk-option" onclick="showKioskWalkIn()">
+      <div class="ko-icon">🚶</div>
+      <div class="ko-text"><h3>Walk-In — Join Queue</h3><p>No appointment? Select a service and join the virtual queue</p></div>
+    </button>
+  `;
+}
+
+function showKioskScan() {
+  document.getElementById('kiosk-title').textContent = 'Scan QR Code';
+  document.getElementById('kiosk-body').innerHTML = `
+    <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;">
+      <div style="width:240px;height:240px;border:3px dashed rgba(255,255,255,0.2);border-radius:20px;display:flex;align-items:center;justify-content:center;margin-bottom:24px;">
+        <div style="color:rgba(255,255,255,0.3);font-size:16px;text-align:center;">
+          <div style="font-size:48px;margin-bottom:8px;">📷</div>
+          Position QR code here
+        </div>
+      </div>
+      <button class="btn btn-primary btn-lg" onclick="kioskConfirm()" style="margin-bottom:12px;">Simulate Scan &#10003;</button>
+      <button class="btn btn-ghost" style="color:rgba(255,255,255,0.4);" onclick="showKioskMenu()">&larr; Back</button>
+    </div>
+  `;
+}
+
+function showKioskManual() {
+  document.getElementById('kiosk-title').textContent = 'Enter Reference';
+  document.getElementById('kiosk-body').innerHTML = `
+    <div class="kiosk-input-group" style="max-width:400px;margin:24px auto;">
+      <input class="kiosk-input" id="kiosk-ref-input" placeholder="AQS-2026-XXXX" value="AQS-2026-4821" style="text-align:center;font-family:var(--font-mono);letter-spacing:2px;">
+      <button class="btn btn-primary btn-lg btn-block" onclick="kioskConfirm()">Check In &rarr;</button>
+      <button class="btn btn-ghost btn-block" style="color:rgba(255,255,255,0.4);" onclick="showKioskMenu()">&larr; Back</button>
+    </div>
+  `;
+}
+
+function showKioskWalkIn() {
+  document.getElementById('kiosk-title').textContent = 'Select Service';
+  let html = SERVICES.map((s, i) => `
+    <button class="kiosk-option" onclick="kioskWalkInConfirm('${s.name}')">
+      <div class="ko-icon">${s.icon}</div>
+      <div class="ko-text"><h3>${s.name}</h3><p>Est. ${s.time} service time</p></div>
+    </button>
+  `).join('');
+  html += `<button class="btn btn-ghost btn-block" style="color:rgba(255,255,255,0.4);margin-top:8px;" onclick="showKioskMenu()">&larr; Back</button>`;
+  document.getElementById('kiosk-body').innerHTML = html;
+}
+
+function kioskWalkInConfirm(service) { kioskConfirm(service, true); }
+
+function kioskConfirm(service, isWalkIn) {
+  const ticket = (isWalkIn ? 'W' : 'A') + '-' + (50 + Math.floor(Math.random() * 10)).toString().padStart(3, '0');
+  const wait = 8 + Math.floor(Math.random() * 20);
+  const pos = 3 + Math.floor(Math.random() * 6);
+  document.getElementById('kiosk-title').textContent = 'You\'re Checked In!';
+  document.getElementById('kiosk-body').innerHTML = `
+    <div class="kiosk-confirm-card">
+      <div style="font-size:48px;margin-bottom:8px;">&#10003;</div>
+      <h2 style="font-size:22px;font-weight:700;margin-bottom:4px;">Your Ticket Number</h2>
+      <div class="kiosk-ticket">${ticket}</div>
+      <div class="kiosk-wait">Estimated wait time<strong>~${wait} minutes</strong></div>
+      <div style="font-size:14px;color:rgba(255,255,255,0.4);margin-bottom:24px;">Position ${pos} in queue${service ? ' — ' + service : ''}<br>You will receive an SMS when your turn is near.</div>
+      <button class="btn btn-primary btn-lg" onclick="resetKiosk()">Done</button>
+    </div>
+  `;
+}
+
+function resetKiosk() {
+  document.getElementById('kiosk-idle').style.display = 'flex';
+  document.getElementById('kiosk-main').classList.remove('active');
+}
+
+// ─── QUEUE DISPLAY ───
+function initQueue() {
+  const ql = document.getElementById('queue-list');
+  ql.innerHTML = QUEUE_DATA.map((q, i) => `
+    <div class="queue-item${i === 0 ? ' next' : ''}">
+      <div><div class="qi-ticket">${q.ticket}</div><div class="qi-service">${q.service}</div></div>
+      <div class="qi-wait">${q.wait}</div>
+    </div>
+  `).join('');
+  updateClock();
+  setInterval(updateClock, 1000);
+}
+
+function updateClock() {
+  const now = new Date();
+  document.getElementById('q-clock').textContent = now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+}
+
+// ─── STAFF ───
+function initStaff() {
+  renderStaffQueue();
+}
+
+function renderStaffQueue() {
+  const sl = document.getElementById('staff-queue-list');
+  sl.innerHTML = staffQueueData.map((q, i) => `
+    <div class="staff-queue-item${i === 0 ? ' active' : ''}" onclick="selectQueueItem(${i})">
+      <div class="sqi-top">
+        <span class="sqi-ticket">${q.ticket}</span>
+        <span class="sqi-time">${q.wait}</span>
+      </div>
+      <div class="sqi-name">${q.name}</div>
+      <div class="sqi-service">${q.service}</div>
+    </div>
+  `).join('');
+  document.getElementById('staff-queue-count').textContent = staffQueueData.length;
+  document.getElementById('st-waiting').textContent = staffQueueData.length;
+}
+
+function selectQueueItem(i) {
+  document.querySelectorAll('.staff-queue-item').forEach((el, idx) => el.classList.toggle('active', idx === i));
+  const q = staffQueueData[i];
+  document.getElementById('sc-name').textContent = q.name;
+  document.getElementById('sc-service').textContent = q.service;
+  document.getElementById('sc-ref').textContent = 'AQS-2026-' + (4800 + Math.floor(Math.random() * 200));
+  document.getElementById('sc-jedi').textContent = 'JEDI: JD-RC-' + (400 + Math.floor(Math.random() * 100)).toString().padStart(5, '0');
+}
+
+function callNext() {
+  if (staffQueueData.length === 0) return;
+  const next = staffQueueData.shift();
+  document.getElementById('sc-name').textContent = next.name;
+  document.getElementById('sc-service').textContent = next.service;
+  document.getElementById('sc-ref').textContent = 'AQS-2026-' + (4800 + Math.floor(Math.random() * 200));
+  document.getElementById('sc-jedi').textContent = 'JEDI: JD-RC-' + (400 + Math.floor(Math.random() * 100)).toString().padStart(5, '0');
+  // Update queue display too
+  document.getElementById('q-now-ticket').textContent = next.ticket;
+  const served = parseInt(document.getElementById('st-served').textContent);
+  document.getElementById('st-served').textContent = served + 1;
+  renderStaffQueue();
+}
+
+function markComplete() {
+  const served = parseInt(document.getElementById('st-served').textContent);
+  document.getElementById('st-served').textContent = served + 1;
+  document.getElementById('q-served').textContent = parseInt(document.getElementById('q-served').textContent) + 1;
+  if (staffQueueData.length > 0) callNext();
+}
+
+function markNoShow() {
+  const ns = parseInt(document.getElementById('st-noshow').textContent);
+  document.getElementById('st-noshow').textContent = ns + 1;
+  if (staffQueueData.length > 0) callNext();
+}
+
+function transferCustomer() { alert('Transfer dialog would open — select destination counter or service queue.'); }
+
+function togglePause() {
+  staffPaused = !staffPaused;
+  document.getElementById('pause-btn').innerHTML = staffPaused ? '&#9654; Resume' : '&#9208; Pause';
+  document.getElementById('pause-btn').className = staffPaused ? 'btn btn-sm btn-success' : 'btn btn-sm btn-warning';
+  document.getElementById('staff-status-text').textContent = staffPaused ? 'On Break' : 'Active';
+  document.getElementById('staff-status-text').style.color = staffPaused ? 'var(--warning)' : 'var(--success)';
+  document.getElementById('staff-dot').className = staffPaused ? 'staff-status-dot paused' : 'staff-status-dot active';
+}
+
+// ─── ADMIN ───
+function initAdmin() {
+  // Counter status
+  const csg = document.getElementById('counter-status-grid');
+  csg.innerHTML = COUNTERS.map(c => `
+    <div class="counter-row">
+      <div class="cr-num">${c.num}</div>
+      <div class="cr-agent">${c.agent}</div>
+      <div class="cr-status ${c.status}">${c.status}</div>
+    </div>
+  `).join('');
+
+  // Service config
+  const scb = document.getElementById('service-config-body');
+  scb.innerHTML = SERVICES.map(s => `
+    <tr>
+      <td style="font-weight:600;">${s.icon} ${s.name}</td>
+      <td>${s.time}</td>
+      <td>${30 + Math.floor(Math.random() * 40)}</td>
+      <td>${Math.random() > 0.3 ? '<span style="color:var(--success);font-weight:700;">Yes</span>' : '<span style="color:var(--text-muted);">No</span>'}</td>
+      <td><span class="badge badge-success">Active</span></td>
+    </tr>
+  `).join('');
+
+  // CSAT bars
+  const csatData = [
+    { name: 'Vital Records', score: 4.5, color: 'var(--success)' },
+    { name: 'Property Docs', score: 4.2, color: 'var(--success)' },
+    { name: 'Marriage Lic.', score: 4.7, color: 'var(--success)' },
+    { name: 'Birth Cert.', score: 4.1, color: 'var(--primary)' },
+    { name: 'Voter Reg.', score: 3.8, color: 'var(--warning)' },
+    { name: 'Business Filing', score: 4.0, color: 'var(--primary)' },
+  ];
+  const csatEl = document.getElementById('csat-bars');
+  csatEl.innerHTML = csatData.map(c => `
+    <div class="csat-bar-row">
+      <div class="csat-bar-label">${c.name}</div>
+      <div class="csat-bar-track"><div class="csat-bar-fill" style="width:${c.score/5*100}%;background:${c.color};"></div></div>
+      <div class="csat-bar-val">${c.score}</div>
+    </div>
+  `).join('');
+
+  drawPeakChart();
+  drawQueueChart();
+}
+
+function drawPeakChart() {
+  const canvas = document.getElementById('chart-peak');
+  const ctx = canvas.getContext('2d');
+  const dpr = window.devicePixelRatio || 1;
+  const rect = canvas.parentElement.getBoundingClientRect();
+  canvas.width = rect.width * dpr;
+  canvas.height = 200 * dpr;
+  canvas.style.width = rect.width + 'px';
+  canvas.style.height = '200px';
+  ctx.scale(dpr, dpr);
+
+  const data = [4, 8, 15, 22, 28, 32, 30, 35, 25, 18, 12, 8];
+  const labels = ['7AM','8AM','9AM','10AM','11AM','12PM','1PM','2PM','3PM','4PM','5PM','6PM'];
+  const w = rect.width, h = 200;
+  const maxVal = 40;
+  const barW = (w - 60) / data.length;
+  const startX = 40;
+
+  // Grid
+  ctx.strokeStyle = '#E2E8F0';
+  ctx.lineWidth = 0.5;
+  for (let i = 0; i <= 4; i++) {
+    const y = 20 + (h - 50) * (1 - i/4);
+    ctx.beginPath(); ctx.moveTo(startX, y); ctx.lineTo(w - 10, y); ctx.stroke();
+    ctx.fillStyle = '#94A3B8';
+    ctx.font = '10px Plus Jakarta Sans';
+    ctx.textAlign = 'right';
+    ctx.fillText(Math.round(maxVal * i/4), startX - 8, y + 3);
+  }
+
+  // Bars
+  data.forEach((val, i) => {
+    const barH = (val / maxVal) * (h - 50);
+    const x = startX + i * barW + barW * 0.15;
+    const y = h - 30 - barH;
+    const bw = barW * 0.7;
+
+    const grad = ctx.createLinearGradient(0, y, 0, y + barH);
+    grad.addColorStop(0, '#818CF8');
+    grad.addColorStop(1, '#4F46E5');
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.roundRect(x, y, bw, barH, [4, 4, 0, 0]);
+    ctx.fill();
+
+    // Label
+    ctx.fillStyle = '#94A3B8';
+    ctx.font = '10px Plus Jakarta Sans';
+    ctx.textAlign = 'center';
+    ctx.fillText(labels[i], x + bw/2, h - 14);
+
+    // Value on top
+    ctx.fillStyle = '#4F46E5';
+    ctx.font = 'bold 10px Plus Jakarta Sans';
+    ctx.fillText(val, x + bw/2, y - 5);
+  });
+}
+
+function drawQueueChart() {
+  const canvas = document.getElementById('chart-queue');
+  const ctx = canvas.getContext('2d');
+  const dpr = window.devicePixelRatio || 1;
+  const rect = canvas.parentElement.getBoundingClientRect();
+  canvas.width = rect.width * dpr;
+  canvas.height = 200 * dpr;
+  canvas.style.width = rect.width + 'px';
+  canvas.style.height = '200px';
+  ctx.scale(dpr, dpr);
+
+  const w = rect.width, h = 200;
+  const points = [3,5,8,12,10,15,18,14,16,12,9,14,17,20,16,12,10,13,15,11,8,12,14,10];
+  const maxVal = 25;
+  const startX = 40;
+  const stepX = (w - 60) / (points.length - 1);
+
+  // Grid
+  ctx.strokeStyle = '#E2E8F0';
+  ctx.lineWidth = 0.5;
+  for (let i = 0; i <= 4; i++) {
+    const y = 20 + (h - 50) * (1 - i/4);
+    ctx.beginPath(); ctx.moveTo(startX, y); ctx.lineTo(w - 10, y); ctx.stroke();
+    ctx.fillStyle = '#94A3B8';
+    ctx.font = '10px Plus Jakarta Sans';
+    ctx.textAlign = 'right';
+    ctx.fillText(Math.round(maxVal * i/4), startX - 8, y + 3);
+  }
+
+  // Area fill
+  ctx.beginPath();
+  ctx.moveTo(startX, h - 30);
+  points.forEach((val, i) => {
+    const x = startX + i * stepX;
+    const y = 20 + (h - 50) * (1 - val/maxVal);
+    if (i === 0) ctx.lineTo(x, y);
+    else {
+      const px = startX + (i-1) * stepX;
+      const py = 20 + (h - 50) * (1 - points[i-1]/maxVal);
+      const cx = (px + x) / 2;
+      ctx.bezierCurveTo(cx, py, cx, y, x, y);
+    }
+  });
+  ctx.lineTo(startX + (points.length-1) * stepX, h - 30);
+  ctx.closePath();
+  const grad = ctx.createLinearGradient(0, 0, 0, h);
+  grad.addColorStop(0, 'rgba(6,182,212,0.15)');
+  grad.addColorStop(1, 'rgba(6,182,212,0)');
+  ctx.fillStyle = grad;
+  ctx.fill();
+
+  // Line
+  ctx.beginPath();
+  points.forEach((val, i) => {
+    const x = startX + i * stepX;
+    const y = 20 + (h - 50) * (1 - val/maxVal);
+    if (i === 0) ctx.moveTo(x, y);
+    else {
+      const px = startX + (i-1) * stepX;
+      const py = 20 + (h - 50) * (1 - points[i-1]/maxVal);
+      const cx = (px + x) / 2;
+      ctx.bezierCurveTo(cx, py, cx, y, x, y);
+    }
+  });
+  ctx.strokeStyle = '#06B6D4';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+  // Dots
+  points.forEach((val, i) => {
+    if (i % 3 === 0) {
+      const x = startX + i * stepX;
+      const y = 20 + (h - 50) * (1 - val/maxVal);
+      ctx.beginPath();
+      ctx.arc(x, y, 3, 0, Math.PI * 2);
+      ctx.fillStyle = '#06B6D4';
+      ctx.fill();
+      ctx.strokeStyle = '#fff';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+    }
+  });
+}
+
+function exportCSV() {
+  const csv = 'Hour,Customers Served\n7AM,4\n8AM,8\n9AM,15\n10AM,22\n11AM,28\n12PM,32\n1PM,30\n2PM,35\n3PM,25\n4PM,18\n5PM,12\n6PM,8';
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'aqs-daily-report.csv';
+  a.click();
+}
+
+// ─── INIT ───
+initBooking();
+initQueue();
+initStaff();
+initAdmin();
+
+window.addEventListener('resize', () => { drawPeakChart(); drawQueueChart(); });
+</script>
+</body>
+</html>

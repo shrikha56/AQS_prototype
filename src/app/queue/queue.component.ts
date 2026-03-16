@@ -1,0 +1,246 @@
+import { Component, inject, signal, OnInit, OnDestroy } from '@angular/core';
+import { QueueService } from '../services/queue.service';
+
+@Component({
+  selector: 'app-queue',
+  standalone: true,
+  template: `
+    <div class="queue-display">
+      <div class="display-left">
+        <div class="now-serving-label">NOW SERVING</div>
+        <div class="now-serving-ticket mono" [class.cycling]="isCycling()">
+          {{ currentServing() }}
+        </div>
+        <div class="now-serving-counter">Counter {{ currentCounter() }}</div>
+        <div class="now-serving-service">{{ currentServiceName() }}</div>
+      </div>
+      <div class="display-right">
+        <div class="up-next-label">UP NEXT</div>
+        <div class="up-next-list">
+          @for (item of waitingItems(); track item.ticket; let i = $index) {
+            <div class="next-item" [class.first]="i === 0">
+              <div class="next-ticket mono">{{ item.ticket }}</div>
+              <div class="next-info">
+                <div class="next-service">{{ item.service }}</div>
+                <div class="next-wait">{{ getWaitTime(item.checkInTime) }} min wait</div>
+              </div>
+            </div>
+          }
+          @if (waitingItems().length === 0) {
+            <div class="empty-queue">No customers waiting</div>
+          }
+        </div>
+      </div>
+      <div class="display-footer">
+        <div class="footer-stats">
+          <div class="stat">
+            <span class="stat-value">{{ queueService.waitingCount() }}</span>
+            <span class="stat-label">Waiting</span>
+          </div>
+          <div class="stat">
+            <span class="stat-value">{{ queueService.servingCount() }}</span>
+            <span class="stat-label">Being Served</span>
+          </div>
+          <div class="stat">
+            <span class="stat-value">{{ servedToday }}</span>
+            <span class="stat-label">Served Today</span>
+          </div>
+          <div class="stat">
+            <span class="stat-value">{{ queueService.avgWaitMinutes() }}m</span>
+            <span class="stat-label">Avg Wait</span>
+          </div>
+        </div>
+        <div class="footer-message">
+          <span class="marquee">Welcome to LA County Registrar-Recorder/County Clerk &mdash; Powered by PlaceOS AQS &mdash; Please have your documents ready</span>
+        </div>
+        <div class="footer-clock mono">{{ currentTime() }}</div>
+      </div>
+    </div>
+  `,
+  styles: [`
+    :host { display: block; height: 100%; margin: -24px -28px; }
+    .queue-display {
+      height: 100%;
+      background: linear-gradient(135deg, var(--secondary) 0%, var(--secondary-focus) 100%);
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      grid-template-rows: 1fr 72px;
+      color: var(--secondary-content);
+      overflow: hidden;
+    }
+    .display-left {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      border-right: 1px solid rgba(255,255,255,0.06);
+      padding: 40px;
+    }
+    .now-serving-label {
+      font-size: 16px;
+      font-weight: 700;
+      letter-spacing: 4px;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 16px;
+    }
+    .now-serving-ticket {
+      font-size: 96px;
+      font-weight: 700;
+      color: var(--secondary-content);
+      text-shadow: 0 0 60px hsla(156, 57%, 48%, 0.4);
+      transition: all 0.5s;
+      animation: ticketPulse 3s ease-in-out infinite;
+    }
+    @keyframes ticketPulse {
+      0%, 100% { text-shadow: 0 0 40px hsla(156, 57%, 48%, 0.3); }
+      50% { text-shadow: 0 0 80px hsla(156, 57%, 48%, 0.6); }
+    }
+    .now-serving-ticket.cycling { animation: cycleIn 0.5s ease; }
+    @keyframes cycleIn {
+      from { opacity: 0; transform: scale(0.8); }
+      to { opacity: 1; transform: scale(1); }
+    }
+    .now-serving-counter {
+      font-size: 24px;
+      font-weight: 600;
+      margin-top: 16px;
+      color: rgba(255,255,255,0.7);
+    }
+    .now-serving-service {
+      font-size: 16px;
+      margin-top: 8px;
+      color: rgba(255,255,255,0.4);
+    }
+    .display-right {
+      padding: 32px;
+      overflow-y: auto;
+    }
+    .up-next-label {
+      font-size: 14px;
+      font-weight: 700;
+      letter-spacing: 3px;
+      color: rgba(255,255,255,0.5);
+      margin-bottom: 20px;
+    }
+    .up-next-list { display: flex; flex-direction: column; gap: 8px; }
+    .next-item {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 16px 20px;
+      background: rgba(255,255,255,0.04);
+      border-radius: 12px;
+      border: 1px solid rgba(255,255,255,0.06);
+      transition: all 0.3s;
+    }
+    .next-item.first {
+      background: hsla(156, 57%, 48%, 0.08);
+      border-color: hsla(156, 57%, 48%, 0.3);
+      animation: glow 2s ease-in-out infinite;
+    }
+    .next-ticket {
+      font-size: 22px;
+      font-weight: 700;
+      min-width: 80px;
+      color: var(--accent);
+    }
+    .next-info { flex: 1; }
+    .next-service { font-size: 14px; font-weight: 600; }
+    .next-wait { font-size: 12px; color: rgba(255,255,255,0.4); margin-top: 2px; }
+    .empty-queue {
+      text-align: center;
+      padding: 60px 20px;
+      color: rgba(255,255,255,0.3);
+      font-size: 16px;
+    }
+    .display-footer {
+      grid-column: 1 / -1;
+      display: flex;
+      align-items: center;
+      background: rgba(0,0,0,0.3);
+      border-top: 1px solid rgba(255,255,255,0.06);
+      padding: 0 24px;
+      gap: 24px;
+    }
+    .footer-stats { display: flex; gap: 24px; flex-shrink: 0; }
+    .stat { display: flex; flex-direction: column; align-items: center; }
+    .stat-value { font-size: 18px; font-weight: 700; color: var(--accent); }
+    .stat-label { font-size: 10px; color: rgba(255,255,255,0.4); text-transform: uppercase; letter-spacing: 1px; }
+    .footer-message {
+      flex: 1;
+      overflow: hidden;
+      white-space: nowrap;
+    }
+    .marquee {
+      display: inline-block;
+      animation: marquee 30s linear infinite;
+      font-size: 13px;
+      color: rgba(255,255,255,0.5);
+    }
+    @keyframes marquee {
+      from { transform: translateX(100%); }
+      to { transform: translateX(-100%); }
+    }
+    .footer-clock {
+      font-size: 20px;
+      font-weight: 700;
+      color: var(--secondary-content);
+      flex-shrink: 0;
+    }
+  `]
+})
+export class QueueComponent implements OnInit, OnDestroy {
+  readonly queueService = inject(QueueService);
+
+  readonly currentTime = signal('');
+  readonly isCycling = signal(false);
+  readonly servedToday = 47;
+
+  private _clockInterval: ReturnType<typeof setInterval> | null = null;
+  private _cycleInterval: ReturnType<typeof setInterval> | null = null;
+
+  ngOnInit(): void {
+    this.updateClock();
+    this._clockInterval = setInterval(() => this.updateClock(), 1000);
+    this._cycleInterval = setInterval(() => {
+      this.isCycling.set(true);
+      setTimeout(() => this.isCycling.set(false), 600);
+    }, 8000);
+  }
+
+  ngOnDestroy(): void {
+    if (this._clockInterval) clearInterval(this._clockInterval);
+    if (this._cycleInterval) clearInterval(this._cycleInterval);
+  }
+
+  private updateClock(): void {
+    const now = new Date();
+    this.currentTime.set(now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
+  }
+
+  currentServing(): string {
+    const serving = this.queueService.queue().find(q => q.status === 'serving');
+    return serving?.ticket ?? '---';
+  }
+
+  currentCounter(): number {
+    const serving = this.queueService.queue().find(q => q.status === 'serving');
+    return serving?.counter ?? 0;
+  }
+
+  currentServiceName(): string {
+    const serving = this.queueService.queue().find(q => q.status === 'serving');
+    return serving?.service ?? '';
+  }
+
+  waitingItems(): { ticket: string; service: string; checkInTime: Date }[] {
+    return this.queueService.queue()
+      .filter(q => q.status === 'waiting')
+      .slice(0, 8);
+  }
+
+  getWaitTime(checkIn: Date): number {
+    return Math.round((new Date().getTime() - checkIn.getTime()) / 60000);
+  }
+}
