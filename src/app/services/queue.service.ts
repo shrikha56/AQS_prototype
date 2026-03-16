@@ -40,6 +40,37 @@ export interface Counter {
 
 @Injectable({ providedIn: 'root' })
 export class QueueService {
+  private _channel: BroadcastChannel | null = typeof BroadcastChannel !== 'undefined' ? new BroadcastChannel('aqs-queue-sync') : null;
+  private _broadcasting = false;
+
+  constructor() {
+    if (this._channel) {
+      this._channel.onmessage = (event) => {
+        const { type, payload } = event.data;
+        this._broadcasting = true; // prevent re-broadcast
+        if (type === 'queue-update') {
+          const items: QueueItem[] = payload.map((q: any) => ({ ...q, checkInTime: new Date(q.checkInTime) }));
+          this.queue.set(items);
+        } else if (type === 'counters-update') {
+          this.counters.set(payload);
+        }
+        this._broadcasting = false;
+      };
+    }
+  }
+
+  private _broadcastQueue(): void {
+    if (this._channel && !this._broadcasting) {
+      this._channel.postMessage({ type: 'queue-update', payload: this.queue() });
+    }
+  }
+
+  private _broadcastCounters(): void {
+    if (this._channel && !this._broadcasting) {
+      this._channel.postMessage({ type: 'counters-update', payload: this.counters() });
+    }
+  }
+
   readonly locations = signal<Location[]>([
     { id: 'norwalk', name: 'Norwalk Headquarters', address: '12400 Imperial Hwy, Norwalk, CA 90650', waitTime: 23 },
     { id: 'vannuys', name: 'Van Nuys', address: '14340 Sylvan St, Van Nuys, CA 91401', waitTime: 15 },
@@ -111,6 +142,7 @@ export class QueueService {
       jediRef,
     };
     this.queue.update(q => [...q, item]);
+    this._broadcastQueue();
     return item;
   }
 
@@ -131,6 +163,8 @@ export class QueueService {
     this.counters.update(c => c.map(counter =>
       counter.id === counterId ? { ...counter, currentTicket: next.ticket } : counter
     ));
+    this._broadcastQueue();
+    this._broadcastCounters();
     return next;
   }
 
@@ -143,7 +177,9 @@ export class QueueService {
       this.counters.update(c => c.map(counter =>
         counter.id === item.counter ? { ...counter, currentTicket: null } : counter
       ));
+      this._broadcastCounters();
     }
+    this._broadcastQueue();
   }
 
   markNoShow(ticket: string): void {
@@ -155,7 +191,9 @@ export class QueueService {
       this.counters.update(c => c.map(counter =>
         counter.id === item.counter ? { ...counter, currentTicket: null } : counter
       ));
+      this._broadcastCounters();
     }
+    this._broadcastQueue();
   }
 
   transfer(ticket: string, toCounterId: number): void {
@@ -165,11 +203,14 @@ export class QueueService {
     this.counters.update(c => c.map(counter =>
       counter.id === toCounterId ? { ...counter, currentTicket: ticket } : counter
     ));
+    this._broadcastQueue();
+    this._broadcastCounters();
   }
 
   togglePause(counterId: number): void {
     this.counters.update(c => c.map(counter =>
       counter.id === counterId ? { ...counter, status: counter.status === 'paused' ? 'active' as const : 'paused' as const } : counter
     ));
+    this._broadcastCounters();
   }
 }
